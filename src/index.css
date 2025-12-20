@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities; 
+/* ===== GLOBAL UI HELPERS ===== */
+.input {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  outline: none;
+}
+.input:focus {
+  border-color: #16a34a;
+}
