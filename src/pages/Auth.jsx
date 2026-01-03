@@ -1,15 +1,9 @@
 // src/pages/Auth.jsx
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import {
-  FaEye,
-  FaEyeSlash,
-  FaUser,
-  FaEnvelope,
-  FaHeart,
-  FaCommentDots,
-} from "react-icons/fa";
+import { FaHeart, FaCommentDots } from "react-icons/fa";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { useUser } from "../context/UserContext"; // ✅ Import User Context
 
 const initialLogin = { email: "", password: "" };
 
@@ -26,6 +20,7 @@ const initialSignup = {
 export default function Auth() {
   const [search] = useSearchParams();
   const navigate = useNavigate();
+  const { login } = useUser(); // ✅ Use context login function
 
   const [mode, setMode] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
@@ -76,7 +71,7 @@ export default function Auth() {
     return e;
   };
 
-  // ✅ LOGIN (FIXED REDIRECT)
+  // ✅ LOGIN
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setErrors({});
@@ -100,9 +95,8 @@ export default function Auth() {
       if (!res.ok)
         return setBanner({ type: "error", message: data.message });
 
-      // Save auth
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      // ✅ Save user and token in context
+      login(data.user, data.token);
 
       setBanner({ type: "success", message: "Login successful!" });
 
@@ -120,7 +114,7 @@ export default function Auth() {
     }
   };
 
-  // SIGNUP
+  // ✅ SIGNUP
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     setErrors({});

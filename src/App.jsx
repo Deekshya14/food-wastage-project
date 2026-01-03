@@ -2,6 +2,9 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import Auth from "./pages/Auth";
+import Profile from "./pages/Profile";
+import { UserProvider } from "./context/UserContext";
+import Chat from "./pages/dashboard/Chat"; // <-- new chat component
 
 
 // layouts
@@ -16,38 +19,44 @@ import AdminDashboard from "./pages/dashboard/AdminDashboard";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
-function App(){
+function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Auth />} />
-        <Route path="/signup" element={<Auth />} />
+      <UserProvider>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<Auth />} />
+          <Route path="/signup" element={<Auth />} />
 
-        {/* Receiver protected */}
-        <Route element={<ProtectedRoute allowedRoles={["receiver"]} />}>
-          <Route path="/dashboard/receiver" element={<ReceiverLayout />}>
-            <Route index element={<ReceiverDashboard />} />
+          {/* Receiver protected */}
+          <Route element={<ProtectedRoute allowedRoles={["receiver"]} />}>
+            <Route path="/dashboard/receiver" element={<ReceiverLayout />}>
+              <Route index element={<ReceiverDashboard />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="chat/:userId" element={<Chat />} />  
+            </Route>
           </Route>
-        </Route>
 
-        {/* Donor protected */}
-        <Route element={<ProtectedRoute allowedRoles={["donor"]} />}>
-          <Route path="/dashboard/donor" element={<DonorLayout />}>
-            <Route index element={<DonorDashboard />} />
+          {/* Donor protected */}
+          <Route element={<ProtectedRoute allowedRoles={["donor"]} />}>
+            <Route path="/dashboard/donor" element={<DonorLayout />}>
+              <Route index element={<DonorDashboard />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="chat/:userId" element={<Chat />} />  
+            </Route>
           </Route>
-        </Route>
 
-        {/* Admin protected */}
-        <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
-          <Route path="/dashboard/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
-            {/* You can add nested admin routes: /dashboard/admin/users etc */}
+          {/* Admin protected */}
+          <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+            <Route path="/dashboard/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="profile" element={<Profile />} />
+            </Route>
           </Route>
-        </Route>
 
-        <Route path="*" element={<div className="p-8">404 - Not Found</div>} />
-      </Routes>
+          <Route path="*" element={<div className="p-8">404 - Not Found</div>} />
+        </Routes>
+      </UserProvider>
     </Router>
   );
 }

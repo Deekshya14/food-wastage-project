@@ -35,9 +35,28 @@ router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
 
 // GET donor foods
 router.get("/", authMiddleware, async (req, res) => {
-  const foods = await Food.find({ donorId: req.user.id });
-  res.json(foods);
+  try {
+    let filter = {};
+
+    // donor dashboard → only own foods
+    if (req.user.role === "donor") {
+      filter.donorId = req.user.id;
+    }
+
+    // receiver dashboard → available foods only
+    if (req.user.role === "receiver") {
+  filter.status = { $in: ["available", "reserved"] };
+}
+
+
+    const foods = await Food.find(filter).sort({ createdAt: -1 });
+    res.json(foods);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch foods" });
+  }
 });
+
+
 
 // UPDATE
 router.patch("/:id", authMiddleware, upload.single("image"), async (req, res) => {

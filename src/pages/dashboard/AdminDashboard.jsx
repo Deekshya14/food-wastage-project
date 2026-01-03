@@ -1,44 +1,64 @@
-import { FaUsers, FaClipboardList, FaShieldAlt } from "react-icons/fa";
+import React, { useEffect, useState } from "react";
+
+const API = "http://localhost:5000";
 
 export default function AdminDashboard() {
+  const token = localStorage.getItem("token");
+  const [pendingDonors, setPendingDonors] = useState([]);
+
+  useEffect(() => {
+    fetchPendingDonors();
+  }, []);
+
+  const fetchPendingDonors = async () => {
+    const res = await fetch(`${API}/api/users/pending-donors`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    setPendingDonors(data);
+  };
+
+  const approveDonor = async (id) => {
+    await fetch(`${API}/api/users/approve/${id}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    fetchPendingDonors();
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      
-      {/* Header */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-700 rounded-2xl p-8 text-white shadow-lg">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <FaShieldAlt /> Admin Dashboard
-        </h1>
-        <p className="mt-2 text-gray-300">
-          Monitor users and food listings across the platform.
-        </p>
-      </div>
+    <div className="p-6">
+      <h2 className="text-2xl font-bold mb-4">Pending Donor Approvals</h2>
 
-      {/* Admin Actions */}
-      <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-
-        <div className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition">
-          <div className="text-gray-800 text-2xl mb-3">
-            <FaUsers />
-          </div>
-          <h3 className="font-semibold text-lg">Manage Users</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            View donors, receivers and admins.
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition">
-          <div className="text-gray-800 text-2xl mb-3">
-            <FaClipboardList />
-          </div>
-          <h3 className="font-semibold text-lg">Food Listings</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Review and moderate food donations.
-          </p>
-        </div>
-
-      </div>
-
+      {pendingDonors.length === 0 ? (
+        <p className="text-gray-500">No pending donors</p>
+      ) : (
+        <table className="w-full bg-white shadow rounded">
+          <thead>
+            <tr className="bg-gray-100 text-left">
+              <th className="p-3">Name</th>
+              <th className="p-3">Email</th>
+              <th className="p-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pendingDonors.map(d => (
+              <tr key={d._id} className="border-t">
+                <td className="p-3">{d.fullName}</td>
+                <td className="p-3">{d.email}</td>
+                <td className="p-3">
+                  <button
+                    onClick={() => approveDonor(d._id)}
+                    className="bg-green-600 text-white px-4 py-1 rounded"
+                  >
+                    Approve
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

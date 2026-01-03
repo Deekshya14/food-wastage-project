@@ -1,18 +1,21 @@
 import Message from "../models/Message.js";
 
-export const getMessages = async (req, res) => {
-  try {
-    const { roomId } = req.params;
-    const messages = await Message.find({ roomId }).sort({ createdAt: 1 }).populate("senderId", "fullName avatar");
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ message: "Cannot fetch messages" });
-  }
+export const saveMessage = async ({ senderId, receiverId, text }) => {
+  const roomId = [senderId, receiverId].sort().join("_"); // unique room for two users
+
+  const message = await Message.create({ roomId, senderId, receiverId, text });
+  return message.populate("senderId", "fullName avatar")
+                .populate("receiverId", "fullName avatar");
 };
 
-export const saveMessage = async (payload) => {
-  // called from socket when message arrives
-  const { roomId, senderId, receiverId, text } = payload;
-  const m = await Message.create({ roomId, senderId, receiverId, text });
-  return m;
+export const getMessages = async (req, res) => {
+  const { userId } = req.params;      // other user
+  const roomId = [req.user.id, userId].sort().join("_");
+
+  const messages = await Message.find({ roomId })
+    .sort({ createdAt: 1 })
+    .populate("senderId", "fullName avatar")
+    .populate("receiverId", "fullName avatar");
+
+  res.json(messages);
 };

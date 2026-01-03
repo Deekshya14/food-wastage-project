@@ -12,3 +12,19 @@
 .input:focus {
   border-color: #16a34a;
 }
+.label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.btn-blue {
+  background-color: #3b82f6; /* blue-500 */
+  color: white;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.btn-blue:hover {
+  background-color: #2563eb; /* blue-600 */
+}
