@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import { useUser } from "../../context/UserContext";
-import { useParams } from "react-router-dom";
+
 const API = "http://localhost:5000";
 
 export default function Chat({ otherUserId }) {
@@ -9,15 +9,13 @@ export default function Chat({ otherUserId }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const socketRef = useRef();
-  const { userId } = useParams();
 
- 
-const roomId = [user._id, userId].sort().join("_");
+  const roomId = [user._id, otherUserId].sort().join("_");
 
   useEffect(() => {
     socketRef.current = io(API);
 
-    // Join the chat room
+    // Join chat room
     socketRef.current.emit("joinRoom", roomId);
 
     // Listen for new messages
@@ -30,39 +28,53 @@ const roomId = [user._id, userId].sort().join("_");
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
-      .then((data) => setMessages(data));
+      .then((data) => setMessages(Array.isArray(data) ? data : []));
 
     return () => socketRef.current.disconnect();
-  }, [otherUserId, user._id]);
+  }, [otherUserId]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!text.trim()) return;
 
-    const payload = {
-      senderId: user._id,
-      receiverId: otherUserId,
-      text,
-    };
+    try {
+      await fetch(`${API}/api/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          receiverId: otherUserId,
+          text,
+        }),
+      });
 
-    socketRef.current.emit("sendMessage", payload);
-    setText("");
+      setText("");
+    } catch (err) {
+      console.error("Send failed", err);
+    }
   };
 
   return (
     <div className="flex flex-col h-full p-4 border rounded">
-      <div className="flex-1 overflow-y-auto mb-2">
-        {messages.map((m) => (
-          <div
-            key={m._id}
-            className={`p-2 mb-1 rounded ${
-              m.senderId._id === user._id ? "bg-green-200 self-end" : "bg-gray-200 self-start"
-            }`}
-          >
-            <strong>{m.senderId.fullName}: </strong>
-            {m.text}
-          </div>
-        ))}
+      <div className="flex-1 overflow-y-auto mb-2 space-y-2">
+        {messages.map((m) => {
+          const isMine = m.sender === user._id || m.sender?._id === user._id;
+          return (
+            <div
+              key={m._id}
+              className={`p-2 rounded max-w-[70%] ${
+                isMine
+                  ? "bg-green-200 ml-auto text-right"
+                  : "bg-gray-200 mr-auto"
+              }`}
+            >
+              {m.text}
+            </div>
+          );
+        })}
       </div>
+
       <div className="flex gap-2">
         <input
           value={text}
@@ -80,3 +92,4 @@ const roomId = [user._id, userId].sort().join("_");
     </div>
   );
 }
+

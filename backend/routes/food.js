@@ -2,6 +2,7 @@ import express from "express";
 import Food from "../models/Food.js";
 import { upload } from "../middleware/upload.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
+import Request from "../models/Request.js";
 
 const router = express.Router();
 
@@ -12,19 +13,26 @@ router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
     console.log("FILE:", req.file);
 
     const food = await Food.create({
-      title: req.body.title,
-      description: req.body.description,
-      category: req.body.category,
-      meatType: req.body.meatType || "",
-      spiceLevel: req.body.spiceLevel,
-      quantity: Number(req.body.quantity), // 🔴 VERY IMPORTANT
-      pickupLocation: req.body.pickupLocation,
-      availableDate: req.body.availableDate,
-      priceType: req.body.priceType,
-      price: req.body.priceType === "paid" ? Number(req.body.price) : 0,
-      donorId: req.user.id,
-      image: req.file?.filename,
-    });
+  title: req.body.title,
+  description: req.body.description,
+
+  wasteCategory: req.body.wasteCategory,
+  foodState: req.body.foodState,
+  edibility: req.body.edibility,
+  condition: req.body.condition,
+
+  weight: Number(req.body.weight),
+
+  pickupLocation: req.body.pickupLocation,
+  availableDate: req.body.availableDate,
+
+  priceType: req.body.priceType,
+  price: req.body.priceType === "paid" ? Number(req.body.price) : 0,
+
+  donorId: req.user.id,
+  image: req.file?.filename,
+});
+
 
     res.status(201).json(food);
   } catch (err) {
@@ -62,8 +70,19 @@ router.get("/", authMiddleware, async (req, res) => {
 router.patch("/:id", authMiddleware, upload.single("image"), async (req, res) => {
   try {
     const update = {
-      ...req.body,
-      quantity: Number(req.body.quantity),
+      title: req.body.title,
+      description: req.body.description,
+
+      wasteCategory: req.body.wasteCategory,
+      foodState: req.body.foodState,
+      edibility: req.body.edibility,
+      condition: req.body.condition,
+
+      weight: Number(req.body.weight),
+      pickupLocation: req.body.pickupLocation,
+      availableDate: req.body.availableDate,
+      priceType: req.body.priceType,
+      price: req.body.priceType === "paid" ? Number(req.body.price) : 0,
     };
 
     if (req.file) update.image = req.file.filename;
@@ -71,15 +90,35 @@ router.patch("/:id", authMiddleware, upload.single("image"), async (req, res) =>
     await Food.findByIdAndUpdate(req.params.id, update);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: err.message });
   }
 });
 
 // DELETE
+// DELETE (SOFT DELETE)
 router.delete("/:id", authMiddleware, async (req, res) => {
-  await Food.findByIdAndDelete(req.params.id);
-  res.json({ success: true });
-});
+  try {
+    const food = await Food.findById(req.params.id);
 
+    if (!food) {
+      return res.status(404).json({ message: "Food not found" });
+    }
+
+    // ✅ Only donor can delete
+    if (food.donorId.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    // ✅ DELETE all related requests
+    await Request.deleteMany({ foodId: food._id });
+
+    // ✅ DELETE food
+    await Food.findByIdAndDelete(food._id);
+
+    res.json({ message: "Food and related requests deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Delete failed" });
+  }
+});
 export default router;

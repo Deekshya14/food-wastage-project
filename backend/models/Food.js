@@ -3,30 +3,37 @@ import mongoose from "mongoose";
 const foodSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
-    description: { type: String },
+    description: String,
 
-    category: {
+    wasteCategory: {
       type: String,
-      enum: ["veg", "nonveg"],
+      enum: ["biodegradable", "non-biodegradable"],
       required: true,
     },
 
-    meatType: {
+    foodState: {
       type: String,
-      enum: ["chicken", "mutton", "pork", ""],
-      default: "",
-    },
-
-    spiceLevel: {
-      type: String,
-      enum: ["mild", "medium", "spicy"],
-      default: "medium",
-    },
-
-    quantity: {
-      type: Number,
+      enum: ["cooked", "raw", "packaged", "expired"],
       required: true,
     },
+
+    edibility: {
+      type: String,
+      enum: ["edible", "non-edible"],
+      required: true,
+    },
+
+    condition: {
+      type: String,
+      enum: ["fresh", "near-expiry", "spoiled"],
+      required: true,
+    },
+
+    weight: {
+  type: Number,
+  required: true,
+},
+
 
     pickupLocation: {
       type: String,
@@ -49,9 +56,7 @@ const foodSchema = new mongoose.Schema(
       default: 0,
     },
 
-    image: {
-      type: String,
-    },
+    image: String,
 
     status: {
       type: String,
