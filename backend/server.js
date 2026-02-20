@@ -52,35 +52,34 @@ io.on("connection", (socket) => {
   });
 
   // --- JOIN PRIVATE ROOM ---
-  socket.on("joinRoom", ({ senderId, receiverId }) => {
-    const roomId = [senderId, receiverId].sort().join("_");
-    socket.join(roomId);
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
-  });
+  socket.on("joinChat", ({ userId, partnerId }) => {
+  const roomId = [userId, partnerId].sort().join("_");
+  socket.join(roomId);
+  console.log(`User ${userId} joined room: ${roomId}`);
+});
 
   // --- SEND MESSAGE ---
-  socket.on("sendMessage", async ({ senderId, receiverId, text }) => {
-    try {
-      const message = await saveMessage({ senderId, receiverId, text });
-      const roomId = [senderId, receiverId].sort().join("_");
+  socket.on("sendMessage", (savedMsg) => {
+  // 1. The message is already saved in the DB by the API route.
+  // 2. We use the roomId that the database/API already created.
+  const roomId = savedMsg.roomId;
 
-      // Send message to both users in the room
-      io.to(roomId).emit("newMessage", message);
+  // 3. Send the message to everyone in that room
+  // We use 'receiveMessage' to match what your ChatWindow is listening for
+  socket.to(roomId).emit("receiveMessage", savedMsg);
 
-      // Send notification to receiver if online
-      const receiverSocketId = onlineUsers[receiverId];
-      if (receiverSocketId && receiverSocketId !== socket.id) {
-        io.to(receiverSocketId).emit("newNotification", {
-          senderId,
-          text,
-          messageId: message._id,
-          createdAt: message.createdAt,
-        });
-      }
-    } catch (err) {
-      console.error("Error saving message:", err);
-    }
-  });
+  // 4. Send notification to receiver if they aren't in the room
+  const receiverId = savedMsg.receiver;
+  const receiverSocketId = onlineUsers[receiverId];
+  
+  if (receiverSocketId) {
+    io.to(receiverSocketId).emit("newNotification", {
+      senderId: savedMsg.sender,
+      text: savedMsg.text,
+      messageId: savedMsg._id,
+    });
+  }
+});
 
   // --- HANDLE DISCONNECT ---
   socket.on("disconnect", () => {

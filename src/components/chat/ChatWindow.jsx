@@ -1,115 +1,117 @@
 // src/components/chat/ChatWindow.jsx
-import React, { useEffect, useState, useRef } from "react";
-import { useUser } from "../../context/UserContext";
+import React, { useState, useEffect, useRef } from "react";
+import { FaPaperPlane } from "react-icons/fa";
 
-export default function ChatWindow({ socket, partnerId, onCloseChat }) {
-  const { user, token } = useUser();
+export default function ChatWindow({ socket, partnerId, token, currentUser }) {
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
+  const [text, setText] = useState("");
   const scrollRef = useRef();
 
-  // Fetch chat history with this partner
   useEffect(() => {
-    if (!partnerId) return;
-    const fetchMessages = async () => {
-      const res = await fetch(
-        `http://localhost:5000/api/messages/${partnerId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await res.json();
-      setMessages(data);
-    };
-    fetchMessages();
-  }, [partnerId, token]);
+    // FIX: prevent 400 Bad Request by checking if partnerId is valid
+    if (!partnerId || partnerId === "undefined") return;
 
-  // Listen to incoming messages
-  useEffect(() => {
-    if (!socket) return;
+    // 1. Fetch History
+    fetch(`http://localhost:5000/api/messages/${partnerId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("History fetch failed");
+        return res.json();
+      })
+      .then((data) => setMessages(Array.isArray(data) ? data : []))
+      .catch(err => console.error("Chat History Error:", err));
 
-    const handleMessage = (msg) => {
-      if (msg.senderId === partnerId || msg.receiverId === partnerId) {
-        setMessages((prev) => [...prev, msg]);
-      }
-    };
+    // 2. Join Socket Room
+    if (socket && currentUser?._id) {
+      socket.emit("joinChat", { userId: currentUser._id, partnerId });
+      
+      const handleMessage = (newMessage) => {
+        setMessages((prev) => [...prev, newMessage]);
+      };
 
-    socket.on("receiveMessage", handleMessage);
+      socket.on("receiveMessage", handleMessage);
+      
+      return () => socket.off("receiveMessage", handleMessage);
+    }
+  }, [partnerId, socket, currentUser?._id, token]);
 
-    return () => socket.off("receiveMessage", handleMessage);
-  }, [socket, partnerId]);
-
-  // Auto scroll to bottom
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
+  const handleSend = async (e) => {
+    e.preventDefault();
+    if (!text.trim() || !partnerId) return;
 
-    const msgObj = {
-      senderId: user._id,
-      receiverId: partnerId,
-      content: input,
-      createdAt: new Date().toISOString(),
-    };
+    const messageData = { receiverId: partnerId, text };
 
-    socket.emit("sendMessage", msgObj);
-    setMessages((prev) => [...prev, msgObj]);
-    setInput("");
+    try {
+      const res = await fetch(`http://localhost:5000/api/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(messageData),
+      });
+      
+      const savedMsg = await res.json();
+      
+      if (socket) {
+        socket.emit("sendMessage", savedMsg);
+      }
+      
+      setMessages((prev) => [...prev, savedMsg]);
+      setText("");
+    } catch (err) {
+      console.error("Send failed", err);
+    }
   };
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex justify-between items-center p-3 border-b">
-        <h3 className="font-semibold">Chat</h3>
-        <button onClick={onCloseChat} className="text-gray-500 hover:text-gray-700">
-          Close
-        </button>
+  // If no partner is selected yet, show a placeholder instead of an empty window
+  if (!partnerId) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-slate-50 text-slate-400 font-medium">
+        Select a conversation to start chatting
       </div>
+    );
+  }
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {messages.map((m, idx) => (
-          <div
-            key={idx}
-            className={`flex ${
-              m.senderId === user._id ? "justify-end" : "justify-start"
-            }`}
-          >
-            <div
-              className={`px-4 py-2 rounded-lg max-w-xs ${
-                m.senderId === user._id ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"
-              }`}
-            >
-              {m.content}
-              <div className="text-xs text-gray-400 mt-1 text-right">
-                {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+  return (
+    <div className="flex flex-col h-full bg-slate-50">
+      {/* MESSAGES AREA */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {messages.map((m, i) => {
+          // Robust isMe check
+          const senderId = m.sender?._id || m.sender;
+          const isMe = senderId === currentUser?._id;
+          
+          return (
+            <div key={m._id || i} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] p-4 rounded-[1.5rem] shadow-sm text-sm font-medium ${
+                isMe ? "bg-slate-900 text-white rounded-br-none" : "bg-white text-slate-700 rounded-bl-none"
+              }`}>
+                {m.text}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={scrollRef} />
       </div>
 
-      {/* Input */}
-      <div className="flex p-3 border-t gap-2">
+      {/* INPUT AREA */}
+      <form onSubmit={handleSend} className="p-4 bg-white border-t flex gap-2">
         <input
-          type="text"
-          className="flex-1 border rounded px-3 py-2 focus:outline-none"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           placeholder="Type a message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          className="flex-1 bg-gray-100 border-none rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
         />
-        <button
-          onClick={sendMessage}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-        >
-          Send
+        <button className="bg-blue-600 text-white p-4 rounded-2xl hover:bg-slate-900 transition-colors shadow-lg shadow-blue-100">
+          <FaPaperPlane size={14} />
         </button>
-      </div>
+      </form>
     </div>
   );
 }

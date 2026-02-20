@@ -6,13 +6,13 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 /* ================================
-   ✅ 1. GET CONVERSATIONS (NEW)
+   ✅ 1. GET CONVERSATIONS
    ================================ */
 router.get("/conversations", authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // 1️⃣ Get all messages where user is sender OR receiver
+    // 1️⃣ Get all messages involving the user
     const messages = await Message.find({
       $or: [{ sender: userId }, { receiver: userId }],
     })
@@ -20,39 +20,32 @@ router.get("/conversations", authMiddleware, async (req, res) => {
       .populate("sender", "fullName avatar")
       .populate("receiver", "fullName avatar");
 
-    // 2️⃣ Group messages by the OTHER user
     const conversations = new Map();
 
     messages.forEach((msg) => {
+      // Determine the other person in the chat
       const otherUser =
-        msg.sender._id.toString() === userId
-          ? msg.receiver
-          : msg.sender;
+        msg.sender._id.toString() === userId ? msg.receiver : msg.sender;
 
-      // 3️⃣ Only take the latest message per user
       if (!conversations.has(otherUser._id.toString())) {
         conversations.set(otherUser._id.toString(), {
           roomId: msg.roomId,
-          user: otherUser,
+          otherUser: otherUser, // Changed key to 'otherUser' for frontend compatibility
           lastMessage: msg.text,
           createdAt: msg.createdAt,
         });
       }
     });
 
-    // 4️⃣ IMPORTANT: return ARRAY (not object)
     res.json([...conversations.values()]);
   } catch (err) {
-    console.error(err);
+    console.error("Conversation Fetch Error:", err);
     res.status(500).json([]);
   }
 });
 
-
-
-
 /* ================================
-   ✅ 2. GET MESSAGES WITH USER
+   ✅ 2. GET MESSAGES WITH SPECIFIC USER
    ================================ */
 router.get("/:userId", authMiddleware, async (req, res) => {
   try {
@@ -68,23 +61,22 @@ router.get("/:userId", authMiddleware, async (req, res) => {
 
     res.json(messages);
   } catch (err) {
-    console.error(err);
+    console.error("Message Fetch Error:", err);
     res.status(500).json([]);
   }
 });
 
-
 /* ================================
-   ✅ 3. SEND MESSAGE (UNCHANGED)
+   ✅ 3. SEND MESSAGE (UPDATED WITH NOTIFICATIONS)
    ================================ */
 router.post("/", authMiddleware, async (req, res) => {
   try {
     const { receiverId, text } = req.body;
 
-    // 1️⃣ Create SAME roomId for both users
+    // 1️⃣ Create unique roomId
     const roomId = [req.user.id, receiverId].sort().join("_");
 
-    // 2️⃣ Save message
+    // 2️⃣ Save to Database
     const message = await Message.create({
       roomId,
       sender: req.user.id,
@@ -92,16 +84,26 @@ router.post("/", authMiddleware, async (req, res) => {
       text,
     });
 
-    // 3️⃣ Emit real-time update
     const io = req.app.get("io");
-    io.to(roomId).emit("newMessage", message);
+    if (io) {
+      // 3️⃣ Real-time update for the Chat Window (Room based)
+      io.to(roomId).emit("newMessage", message);
+
+      // 4️⃣ Real-time update for the Notification Bell (User based)
+      // This sends a ping to the receiver's private room
+      io.to(receiverId).emit("newNotification", {
+        type: "MESSAGE",
+        senderName: req.user.fullName,
+        message: text,
+        time: new Date()
+      });
+    }
 
     res.status(201).json(message);
   } catch (err) {
-    console.error(err);
+    console.error("Send Message Error:", err);
     res.status(500).json({ message: "Failed to send message" });
   }
 });
-
 
 export default router;

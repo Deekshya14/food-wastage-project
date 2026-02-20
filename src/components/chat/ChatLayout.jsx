@@ -1,74 +1,107 @@
 // src/components/chat/ChatLayout.jsx
 import React, { useEffect, useState } from "react";
-import { FaTimes } from "react-icons/fa";
+import { FaTimes, FaChevronLeft } from "react-icons/fa";
 import { io } from "socket.io-client";
 import ChatWindow from "./ChatWindow";
+import { useUser } from "../../context/UserContext";
 
 const API = "http://localhost:5000";
 
 export default function ChatLayout({ partnerId, onClose }) {
+  const { token, user } = useUser();
   const [socket, setSocket] = useState(null);
-  const [chats, setChats] = useState([]); // list of all chat users/conversations
+  const [conversations, setConversations] = useState([]); 
   const [selectedPartner, setSelectedPartner] = useState(partnerId || null);
 
   useEffect(() => {
     const s = io(API);
     setSocket(s);
-
+    fetchConversations();
     return () => s.disconnect();
   }, []);
 
-  useEffect(() => {
-    setSelectedPartner(partnerId); // open chat directly if partnerId is provided
-  }, [partnerId]);
+  const fetchConversations = async () => {
+    try {
+      const res = await fetch(`${API}/api/messages/conversations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      
+      // SAFEGUARD: Filter out any conversations where otherUser is missing
+      const validConversations = Array.isArray(data) 
+        ? data.filter(c => c && c.otherUser) 
+        : [];
+        
+      setConversations(validConversations);
+    } catch (err) {
+      console.error("Error fetching conversations:", err);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-end z-50">
-      <div className="bg-white w-full md:w-96 h-full flex flex-col shadow-xl">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="font-bold text-lg">💬 Chats</h2>
-          <button onClick={onClose} className="text-gray-700 hover:text-gray-900">
-            <FaTimes />
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-end z-[100]">
+      <div className="bg-white w-full md:w-[450px] h-screen flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+        
+        {/* HEADER */}
+        <div className="p-6 border-b flex justify-between items-center bg-white">
+          <div className="flex items-center gap-3">
+            {selectedPartner && (
+              <button onClick={() => setSelectedPartner(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <FaChevronLeft className="text-gray-400" size={14} />
+              </button>
+            )}
+            <h2 className="font-black text-xl text-slate-800 tracking-tight">Messages</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-rose-50 text-gray-400 hover:text-rose-500 rounded-xl transition-all">
+            <FaTimes size={20} />
           </button>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
-          {/* CHAT LIST */}
-          {!selectedPartner && (
-            <div className="w-1/3 border-r overflow-y-auto">
-              {chats.length === 0 ? (
-                <p className="p-4 text-gray-500">No conversations yet</p>
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {!selectedPartner ? (
+            /* CONVERSATION LIST */
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {conversations.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-10">
+                  <div className="w-16 h-16 bg-blue-50 text-blue-400 rounded-full flex items-center justify-center mb-4 text-2xl">💬</div>
+                  <p className="text-gray-400 font-bold text-sm">No conversations yet.<br/>Request food to start chatting!</p>
+                </div>
               ) : (
-                chats.map((c) => (
-                  <div
-                    key={c.userId}
-                    className="p-3 hover:bg-gray-100 cursor-pointer flex items-center gap-2"
-                    onClick={() => setSelectedPartner(c.userId)}
+                conversations.map((conv) => (
+                  <button
+                    key={conv._id}
+                    onClick={() => setSelectedPartner(conv.otherUser?._id)}
+                    className="w-full p-4 hover:bg-blue-50/50 rounded-[1.5rem] flex items-center gap-4 transition-all border border-transparent hover:border-blue-100 group"
                   >
-                    <div className="bg-blue-500 rounded-full w-8 h-8 flex items-center justify-center text-white font-bold">
-                      {c.initials}
+                    <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-sm group-hover:scale-110 transition-transform">
+                      {/* Optional chaining to prevent crash if fullName is missing */}
+                      {conv.otherUser?.fullName?.charAt(0) || "?"}
                     </div>
-                    <span>{c.name}</span>
-                  </div>
+                    <div className="text-left flex-1">
+                      <p className="font-black text-slate-800 text-sm">
+                        {conv.otherUser?.fullName || "Unknown User"}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate max-w-[200px]">
+                        {conv.lastMessage || "No messages yet"}
+                      </p>
+                    </div>
+                    <div className="text-[10px] font-bold text-gray-300">
+                      {conv.updatedAt ? new Date(conv.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                    </div>
+                  </button>
                 ))
               )}
             </div>
+          ) : (
+            /* ACTIVE CHAT WINDOW */
+            <ChatWindow
+              socket={socket}
+              partnerId={selectedPartner}
+              token={token}
+              currentUser={user}
+            />
           )}
-
-          {/* CHAT WINDOW */}
-          <div className="flex-1">
-            {selectedPartner ? (
-              <ChatWindow
-                socket={socket}
-                partnerId={selectedPartner}
-                onCloseChat={() => setSelectedPartner(null)}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-400">
-                Select a chat to start messaging
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>

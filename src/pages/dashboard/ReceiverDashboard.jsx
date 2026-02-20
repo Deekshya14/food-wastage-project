@@ -139,22 +139,39 @@ export default function ReceiverDashboard() {
 
   // ---------------- PARAMETER COMPONENT ----------------
   const FoodMeta = ({ food }) => {
-    const isPaid = food?.priceType === "paid" || (food?.price > 0);
-    const displayPrice = isPaid ? `Rs ${food.price}` : "Free";
+  const isPaid = food?.priceType === "paid" || (food?.price > 0);
+  const displayPrice = isPaid ? `Rs ${food.price}` : "Free";
 
-    return (
-      <div className="grid grid-cols-2 gap-y-3 gap-x-2 mt-2 text-[10px] text-gray-600">
-        <div className="flex items-center gap-1.5 font-bold"><FaWeightHanging className="text-gray-400" /> {food?.weight}kg</div>
-        <div className="flex items-center gap-1.5 uppercase font-black text-blue-600">
-          <FaTag className="text-blue-400" /> {displayPrice}
-        </div>
-        <div className="flex items-center gap-1.5 font-bold"><FaLeaf className="text-gray-400" /> {food?.wasteCategory}</div>
-        <div className="flex items-center gap-1.5 font-bold"><FaExclamationTriangle className="text-gray-400" /> {food?.condition}</div>
-        <div className="flex items-center gap-1.5 font-bold"><FaUtensils className="text-gray-400" /> {food?.foodState}</div>
-        <div className="flex items-center gap-1.5 font-bold uppercase text-emerald-600"><FaCheckCircle className="text-emerald-400" /> {food?.edibility}</div>
+  return (
+    <div className="grid grid-cols-2 gap-y-4 gap-x-4 mt-2 text-[10px]">
+      {/* Price & Weight */}
+      <div className="flex items-center gap-2 font-black text-blue-600 uppercase tracking-tight">
+        <FaTag className="text-blue-400" /> {displayPrice}
       </div>
-    );
-  };
+      <div className="flex items-center gap-2 font-bold text-gray-600">
+        <FaWeightHanging className="text-gray-300" /> {food?.weight}kg
+      </div>
+
+      {/* State & Category */}
+      <div className="flex items-center gap-2 font-bold text-gray-600">
+        <FaUtensils className="text-gray-300" /> 
+        <span className="capitalize">{food?.foodState}</span>
+      </div>
+      <div className="flex items-center gap-2 font-bold text-gray-600">
+        <FaLeaf className="text-gray-300" /> 
+        <span className="capitalize">{food?.wasteCategory}</span>
+      </div>
+
+      {/* Condition & Edibility */}
+      <div className={`flex items-center gap-2 font-black uppercase tracking-tighter ${food?.condition === 'fresh' ? 'text-emerald-500' : 'text-amber-500'}`}>
+        <FaExclamationTriangle /> {food?.condition}
+      </div>
+      <div className={`flex items-center gap-2 font-black uppercase tracking-tighter ${food?.edibility === 'edible' ? 'text-blue-500' : 'text-rose-500'}`}>
+        <FaCheckCircle /> {food?.edibility}
+      </div>
+    </div>
+  );
+};
 
   const counts = useMemo(() => ({
     pending: requests.filter((r) => r.status === "pending").length,
@@ -299,6 +316,18 @@ export default function ReceiverDashboard() {
                               <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-100">
                                 <FoodMeta food={r.foodId} />
                               </div>
+                              
+<button 
+  onClick={() => {
+    // Reach into the populated foodId to find the donorId
+    const targetId = r.foodId?.donorId?._id || r.foodId?.donorId;
+    setChatPartnerId(targetId); 
+    setShowChat(true);
+  }}
+  className="w-full mt-3 py-3 bg-blue-50 text-blue-600 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2"
+>
+  <FaComments size={14} /> Message Donor
+</button>
                             </div>
                         ))
                     )}
@@ -378,45 +407,78 @@ export default function ReceiverDashboard() {
             </div>
 
             {/* BROWSE GRID */}
-            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-8">
-              {filteredFoods.length > 0 ? (
-                filteredFoods.map(f => {
-                    const myReq = requests.find(r => r.foodId?._id === f._id);
-                    return (
-                      <div key={f._id} className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm flex flex-col hover:shadow-xl transition-all duration-500">
-                        <div className="h-56 overflow-hidden relative">
-                          <img src={`${API}/uploads/${f.image}`} className="w-full h-full object-cover" alt="" />
-                          <div className="absolute top-4 left-4">
-                            <span className="bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black text-slate-800 shadow-sm">
-                                {f.pickupLocation}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="p-7 flex flex-col flex-1">
-                          <h3 className="font-black text-xl text-slate-800 mb-1 leading-tight">{f.title}</h3>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-4">{f.wasteCategory}</p>
-                          <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-50 mb-6">
-                              <FoodMeta food={f} />
-                          </div>
-                          <button 
-                            disabled={!!myReq}
-                            onClick={() => requestFood(f._id)}
-                            className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                              myReq ? "bg-gray-100 text-gray-300" : "bg-blue-600 text-white hover:bg-slate-900"
-                            }`}
-                          >
-                            {myReq ? `Requested` : "Request Food"}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-              ) : (
-                <div className="col-span-full py-20 text-center">
-                    <p className="text-slate-400 font-bold">No results found.</p>
-                </div>
-              )}
+            {/* BROWSE GRID */}
+<div className="grid md:grid-cols-2 xl:grid-cols-3 gap-8">
+  {filteredFoods.length > 0 ? (
+    filteredFoods.map(f => {
+      const myReq = requests.find(r => r.foodId?._id === f._id);
+      return (
+        <div key={f._id} className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm flex flex-col hover:shadow-xl transition-all duration-500 group">
+          <div className="h-56 overflow-hidden relative">
+            <img src={`${API}/uploads/${f.image}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
+            
+            {/* Overlay Location Tag */}
+            <div className="absolute top-4 left-4">
+              <span className="bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-black text-slate-800 shadow-lg flex items-center gap-1">
+                <FaMapMarkerAlt className="text-blue-500" /> {f.pickupLocation}
+              </span>
             </div>
+          </div>
+
+          <div className="p-7 flex flex-col flex-1">
+            <div className="flex-1">
+              <h3 className="font-black text-xl text-slate-800 mb-1 leading-tight group-hover:text-blue-600 transition-colors">{f.title}</h3>
+              
+              {/* Description Snippet */}
+              <p className="text-xs text-gray-400 font-medium mb-4 line-clamp-2 italic">
+                {f.description || "No specific details provided by the donor."}
+              </p>
+
+              <div className="bg-slate-50/50 p-5 rounded-[2rem] border border-slate-50 mb-4">
+                <FoodMeta food={f} />
+              </div>
+
+              {/* Availability Date */}
+              <div className="flex items-center gap-2 text-[10px] font-bold text-rose-400 mb-6 px-1">
+                <FaClock /> Available until: {new Date(f.availableDate).toLocaleDateString()}
+              </div>
+            </div>
+
+            <button 
+              disabled={!!myReq}
+              onClick={() => requestFood(f._id)}
+              className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${
+                myReq 
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none" 
+                : "bg-blue-600 text-white hover:bg-slate-900 hover:-translate-y-1 active:scale-95"
+              }`}
+            >
+              {myReq ? `Request Pending` : "Request Food"}
+            </button>
+
+            <button 
+           onClick={() => {
+             // 1. Identify the donor (owner of the food)
+             // Ensure your backend food model includes the 'owner' field
+             setChatPartnerId(f.owner); 
+             setShowChat(true);
+           }}
+           className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"
+           title="Message Donor"
+         >
+           <FaComments size={18} />
+         </button>
+
+          </div>
+        </div>
+      );
+    })
+  ) : (
+    <div className="col-span-full py-20 text-center">
+        <p className="text-slate-400 font-bold">No results found for this category or search.</p>
+    </div>
+  )}
+</div>
           </div>
         )}
       </main>
