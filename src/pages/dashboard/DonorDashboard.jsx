@@ -422,9 +422,29 @@ export default function DonorDashboard() {
                         <div className="flex items-center gap-2 text-[10px] font-bold text-rose-400 col-span-2"><FaCalendarAlt /> Until: {new Date(f.availableDate).toLocaleDateString()}</div>
                       </div>
                       <div className="flex gap-2 pt-2">
-                        <button onClick={() => startEdit(f)} className="flex-1 bg-blue-50 text-blue-600 py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><FaEdit /> Edit</button>
-                        <button onClick={() => deleteFood(f._id)} className="flex-1 bg-rose-50 text-rose-600 py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-rose-600 hover:text-white transition-all"><FaTrash /> Delete</button>
-                      </div>
+  {f.status === 'reserved' ? (
+    // If Reserved: Show a "Locked" message instead of buttons
+    <div className="flex-1 bg-gray-100 text-gray-400 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 cursor-not-allowed">
+      <FaExclamationTriangle /> Approved: Cannot Edit/Delete
+    </div>
+  ) : (
+    // If Available: Show the normal buttons
+    <>
+      <button 
+        onClick={() => startEdit(f)} 
+        className="flex-1 bg-blue-50 text-blue-600 py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all"
+      >
+        <FaEdit /> Edit
+      </button>
+      <button 
+        onClick={() => deleteFood(f._id)} 
+        className="flex-1 bg-rose-50 text-rose-600 py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-rose-600 hover:text-white transition-all"
+      >
+        <FaTrash /> Delete
+      </button>
+    </>
+  )}
+</div>
                     </div>
                   </div>
                 ))}

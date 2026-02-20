@@ -6,56 +6,37 @@ import Request from "../models/Request.js";
 
 const router = express.Router();
 
-// CREATE FOOD
+// 1. CREATE FOOD
 router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
   try {
-    console.log("BODY:", req.body);
-    console.log("FILE:", req.file);
-
     const food = await Food.create({
-  title: req.body.title,
-  description: req.body.description,
-
-  wasteCategory: req.body.wasteCategory,
-  foodState: req.body.foodState,
-  edibility: req.body.edibility,
-  condition: req.body.condition,
-
-  weight: Number(req.body.weight),
-
-  pickupLocation: req.body.pickupLocation,
-  availableDate: req.body.availableDate,
-
-  priceType: req.body.priceType,
-  price: req.body.priceType === "paid" ? Number(req.body.price) : 0,
-
-  donorId: req.user.id,
-  image: req.file?.filename,
-});
-
-
+      title: req.body.title,
+      description: req.body.description,
+      wasteCategory: req.body.wasteCategory,
+      foodState: req.body.foodState,
+      edibility: req.body.edibility,
+      condition: req.body.condition,
+      weight: Number(req.body.weight),
+      pickupLocation: req.body.pickupLocation,
+      availableDate: req.body.availableDate,
+      priceType: req.body.priceType,
+      price: req.body.priceType === "paid" ? Number(req.body.price) : 0,
+      donorId: req.user.id,
+      image: req.file?.filename,
+      status: "available" // Ensure new food starts as available
+    });
     res.status(201).json(food);
   } catch (err) {
-    console.error("CREATE FOOD ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 });
 
-// GET donor foods
+// 2. GET FOODS
 router.get("/", authMiddleware, async (req, res) => {
   try {
     let filter = {};
-
-    // donor dashboard → only own foods
-    if (req.user.role === "donor") {
-      filter.donorId = req.user.id;
-    }
-
-    // receiver dashboard → available foods only
-    if (req.user.role === "receiver") {
-  filter.status = { $in: ["available", "reserved"] };
-}
-
+    if (req.user.role === "donor") filter.donorId = req.user.id;
+    if (req.user.role === "receiver") filter.status = { $in: ["available", "reserved"] };
 
     const foods = await Food.find(filter).sort({ createdAt: -1 });
     res.json(foods);
@@ -64,20 +45,24 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
-
-
-// UPDATE
+// 3. UPDATE (PROTECTED)
 router.patch("/:id", authMiddleware, upload.single("image"), async (req, res) => {
   try {
+    const food = await Food.findById(req.params.id);
+    if (!food) return res.status(404).json({ message: "Food not found" });
+
+    // 🛡️ SUPERVISOR FIX: Block edit if item is already approved
+    if (food.status === "reserved" || food.status === "completed") {
+      return res.status(403).json({ message: "Approved listings cannot be edited." });
+    }
+
     const update = {
       title: req.body.title,
       description: req.body.description,
-
       wasteCategory: req.body.wasteCategory,
       foodState: req.body.foodState,
       edibility: req.body.edibility,
       condition: req.body.condition,
-
       weight: Number(req.body.weight),
       pickupLocation: req.body.pickupLocation,
       availableDate: req.body.availableDate,
@@ -87,38 +72,38 @@ router.patch("/:id", authMiddleware, upload.single("image"), async (req, res) =>
 
     if (req.file) update.image = req.file.filename;
 
-    await Food.findByIdAndUpdate(req.params.id, update);
-    res.json({ success: true });
+    const updatedFood = await Food.findByIdAndUpdate(req.params.id, update, { new: true });
+    res.json(updatedFood);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// DELETE
-// DELETE (SOFT DELETE)
+// 4. DELETE (PROTECTED)
 router.delete("/:id", authMiddleware, async (req, res) => {
   try {
     const food = await Food.findById(req.params.id);
+    if (!food) return res.status(404).json({ message: "Food not found" });
 
-    if (!food) {
-      return res.status(404).json({ message: "Food not found" });
-    }
-
-    // ✅ Only donor can delete
+    // Only owner can delete
     if (food.donorId.toString() !== req.user.id) {
       return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // ✅ DELETE all related requests
-    await Request.deleteMany({ foodId: food._id });
+    // 🛡️ SUPERVISOR FIX: Block delete if item is already approved
+    if (food.status === "reserved" || food.status === "completed") {
+      return res.status(403).json({ 
+        message: "Action forbidden: This item is approved for a receiver and cannot be deleted." 
+      });
+    }
 
-    // ✅ DELETE food
+    await Request.deleteMany({ foodId: food._id });
     await Food.findByIdAndDelete(food._id);
 
     res.json({ message: "Food and related requests deleted" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Delete failed" });
   }
 });
+
 export default router;

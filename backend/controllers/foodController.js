@@ -2,6 +2,7 @@ import Food from "../models/Food.js";
 import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 
+// --- EXISTING CREATE FUNCTION ---
 export const createFood = async (req, res) => {
   try {
     const donorId = req.user.id;
@@ -20,10 +21,7 @@ export const createFood = async (req, res) => {
       status: "available"
     });
 
-    // 🔔 SOCKET + NOTIFICATION LOGIC
     const io = req.app.get("io");
-
-    // find all receivers
     const receivers = await User.find({ role: "receiver" });
 
     for (const r of receivers) {
@@ -31,8 +29,6 @@ export const createFood = async (req, res) => {
         userId: r._id,
         message: `🍱 New food available: ${food.title}`
       });
-
-      // emit to receiver room
       io.to(r._id.toString()).emit("newNotification", notif);
     }
 
@@ -42,3 +38,46 @@ export const createFood = async (req, res) => {
     res.status(500).json({ message: "Cannot create food" });
   }
 };
+
+
+export const deleteFood = async (req, res) => {
+  try {
+    const foodId = req.params.id;
+    const food = await Food.findById(foodId);
+
+    if (!food) {
+      return res.status(404).json({ message: "Food not found" });
+    }
+
+    // 🛡️ CRITICAL CHECK: Prevent delete if approved/reserved
+    if (food.status === "reserved" || food.status === "completed") {
+      return res.status(403).json({ 
+        message: "Action forbidden: This item is already approved for a receiver and cannot be deleted." 
+      });
+    }
+
+    await Food.findByIdAndDelete(foodId);
+    res.json({ message: "Food deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Error deleting food" });
+  }
+};
+
+export const updateFood = async (req, res) => {
+  try {
+    const food = await Food.findById(req.params.id);
+
+    // 🛡️ CRITICAL CHECK: Prevent editing if approved/reserved
+    if (food.status === "reserved" || food.status === "completed") {
+      return res.status(403).json({ 
+        message: "Action forbidden: Approved listings cannot be edited." 
+      });
+    }
+
+    const updatedFood = await Food.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updatedFood);
+  } catch (err) {
+    res.status(500).json({ message: "Error updating food" });
+  }
+};
+
