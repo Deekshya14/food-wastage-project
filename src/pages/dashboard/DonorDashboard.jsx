@@ -86,45 +86,39 @@ export default function DonorDashboard() {
     }
   };
 
-  // ---------------- SOCKET.IO ----------------
-  useEffect(() => {
+  // SOCKET ---
+useEffect(() => {
+  if (!user?._id) return; // Wait until user is loaded
+
   const socket = io(API);
 
-  if (user?._id) {
-    // 1. Join your private room (Using just ID to match backend io.to(receiverId))
-    socket.emit("joinRoom", user._id); 
-    
-    // Also keep your donor-specific room if you use it for other things
+  socket.on("connect", () => {
+    console.log("✅ Donor Socket Connected!");
+    // Join the specific donor room
     socket.emit("joinRoom", `donor_${user._id}`);
+    // Join personal room for other alerts
+    socket.emit("joinRoom", user._id);
+  });
 
-    // ✅ 2. LISTEN FOR NEW MESSAGES (Matches message.js)
-    socket.on("newNotification", (data) => {
-      setNotifications(prev => [{
-        id: Date.now(),
-        // This will show: "Message from John: Is this available?"
-        message: `💬 ${data.senderName}: ${data.message}`, 
-        time: data.time || new Date()
-      }, ...prev]);
-    });
+  socket.on("newNotification", (data) => {
+    console.log("🔔 Notification Received:", data);
+    
+    setNotifications(prev => [{
+      id: Date.now(),
+      message: data.message,
+      time: new Date()
+    }, ...prev]);
+    
+    // Automatically refresh the request cards
+    fetchRequests();
+  });
 
-    // 3. LISTEN FOR NEW FOOD REQUESTS
-    socket.on("newRequest", (data) => {
-      setNotifications(prev => [{
-        id: Date.now(),
-        message: `🍱 New request for: ${data.foodTitle}`,
-        time: new Date()
-      }, ...prev]);
-      fetchRequests();
-    });
-
-    socket.on("requestStatusUpdate", (data) => {
-      fetchRequests();
-    });
-  }
+  socket.on("requestStatusUpdate", () => {
+    fetchRequests();
+  });
 
   return () => socket.disconnect();
-}, [user]);
-
+}, [user?._id]);
 
   useEffect(() => {
     if (user?._id && token) {

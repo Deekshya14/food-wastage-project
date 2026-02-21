@@ -50,6 +50,11 @@ io.on("connection", (socket) => {
     onlineUsers[userId] = socket.id;
     console.log("Online users:", onlineUsers);
   });
+  
+socket.on("joinRoom", (roomName) => {
+  socket.join(roomName);
+  console.log(`Socket ${socket.id} joined room: ${roomName}`);
+});
 
   // --- JOIN PRIVATE ROOM ---
   socket.on("joinChat", ({ userId, partnerId }) => {

@@ -58,11 +58,23 @@ router.post("/:foodId", authMiddleware, async (req, res) => {
     });
 
     const io = req.app.get("io");
-    if (io) {
-      io.to(`donor_${food.donorId.toString()}`).emit("newNotification", {
-        message: `New request from ${req.user.fullName} for "${food.title}"`,
-      });
-    }
+if (io) {
+  const donorId = food.donorId.toString();
+  const donorRoom = `donor_${donorId}`;
+  
+  console.log("--- DEBUG SOCKET ---");
+  console.log("Receiver Name:", req.user.fullName);
+  console.log("Target Donor ID:", donorId);
+  console.log("Emitting to Room:", donorRoom);
+  
+  io.to(donorRoom).emit("newNotification", {
+    message: `New request from ${req.user.fullName} for "${food.title}"`,
+    type: "NEW_REQUEST"
+  });
+  console.log("--- EMIT SUCCESSFUL ---");
+} else {
+  console.log("⚠️ ERROR: Socket.io (io) not found in app.get");
+}
 
     await Notification.create({
       userId: food.donorId,
@@ -75,7 +87,7 @@ router.post("/:foodId", authMiddleware, async (req, res) => {
   }
 });
 
-// 3. UPDATE status (Handle reserved/completed states)
+// 3. UPDATE status (Enhanced for real-time notifications)
 router.put("/:id/status", authMiddleware, async (req, res) => {
   try {
     const { status } = req.body;
@@ -83,35 +95,44 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
 
     if (!request) return res.status(404).json({ message: "Request not found" });
     
-    // Safety check: only the donor can approve/reject/complete
     if (request.foodId.donorId.toString() !== req.user.id)
       return res.status(403).json({ message: "Unauthorized" });
 
     request.status = status;
     await request.save();
 
+    // Handle Food Model updates
     if (status === "approved") {
       await Food.findByIdAndUpdate(request.foodId._id, { status: "reserved" });
-      // Reject others
       await Request.updateMany(
         { foodId: request.foodId._id, _id: { $ne: request._id } },
         { status: "rejected" }
       );
     }
-
     if (status === "completed") {
       await Food.findByIdAndUpdate(request.foodId._id, { status: "completed" });
     }
 
+    // --- 🔔 NOTIFICATION LOGIC ---
     const io = req.app.get("io");
-    if (io) {
-      io.to(request.receiverId.toString()).emit("requestStatusUpdate");
-    }
+    const statusMsg = `Your request for "${request.foodId.title}" has been ${status}.`;
 
+    // 1. Save to MongoDB
     await Notification.create({ 
       userId: request.receiverId, 
-      message: `Your request for "${request.foodId.title}" is now ${status}` 
+      message: statusMsg 
     });
+
+    // 2. Send Real-time via Socket
+    if (io) {
+      // Send to the specific receiver's room
+      io.to(request.receiverId.toString()).emit("newNotification", {
+        message: statusMsg,
+        time: new Date()
+      });
+      // Also tell their app to refresh the request list
+      io.to(request.receiverId.toString()).emit("requestStatusUpdate");
+    }
 
     res.json(request);
   } catch (err) {

@@ -74,13 +74,25 @@ export default function ReceiverDashboard() {
   useEffect(() => {
     fetchData();
     const socket = io(API);
+
     if (user?._id) {
+      // 1. Join your personal room to receive status updates
       socket.emit("joinRoom", user._id);
+
+      // 2. Listen for the bell icon notification
       socket.on("newNotification", (n) => {
         setNotifications((prev) => [n, ...prev]);
+        // Optional: Play a subtle sound or alert
       });
-      socket.on("requestStatusUpdate", () => fetchData());
+
+      // 3. IMPORTANT: Re-fetch data automatically when a request is updated
+      // This makes the "Pending" card move to "Approved" without a page refresh
+      socket.on("requestStatusUpdate", () => {
+        console.log("Status updated! Refreshing data...");
+        fetchData(); 
+      });
     }
+
     return () => socket.disconnect();
   }, [token, user?._id]);
 
@@ -457,17 +469,17 @@ export default function ReceiverDashboard() {
             </button>
 
             <button 
-           onClick={() => {
-             // 1. Identify the donor (owner of the food)
-             // Ensure your backend food model includes the 'owner' field
-             setChatPartnerId(f.owner); 
-             setShowChat(true);
-           }}
-           className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"
-           title="Message Donor"
-         >
-           <FaComments size={18} />
-         </button>
+  onClick={() => {
+    // FIX: Use donorId instead of owner to match your backend model
+    const donorId = f.donorId?._id || f.donorId;
+    setChatPartnerId(donorId); 
+    setShowChat(true);
+  }}
+  className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"
+  title="Message Donor"
+>
+  <FaComments size={18} />
+</button>
 
           </div>
         </div>
