@@ -130,23 +130,59 @@ useEffect(() => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const body = new FormData();
-    Object.entries(form).forEach(([k, v]) => {
+    
+    // Create the final data to send
+    const finalForm = { ...form };
+
+    // 💡 LOGIC: If priceType is free, ensure price is 0/empty 
+    // before sending to the database
+    if (finalForm.priceType === "free") {
+      finalForm.price = "0";
+    }
+
+    Object.entries(finalForm).forEach(([k, v]) => {
+      // Don't append the file here, we do it separately below
       if (k !== "imageFile") body.append(k, v);
     });
-    if (form.imageFile) body.append("image", form.imageFile);
 
-    await fetch(
-      editing ? `${API}/api/food/${editing._id}` : `${API}/api/food`,
-      {
-        method: editing ? "PATCH" : "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body,
+    if (form.imageFile) {
+      body.append("image", form.imageFile);
+    }
+
+    try {
+      const response = await fetch(
+        editing ? `${API}/api/food/${editing._id}` : `${API}/api/food`,
+        {
+          method: editing ? "PATCH" : "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body,
+        }
+      );
+
+      if (response.ok) {
+        setShowForm(false);
+        setEditing(null);
+        // Reset form to defaults
+        setForm({
+          title: "",
+          description: "",
+          wasteCategory: "biodegradable",
+          foodState: "cooked",
+          edibility: "edible",
+          condition: "fresh",
+          weight: 1,
+          pickupLocation: "Kathmandu",
+          availableDate: "",
+          imageFile: null,
+          priceType: "free",
+          price: "",
+        });
+        fetchFoods();
       }
-    );
-
-    setShowForm(false);
-    setEditing(null);
-    fetchFoods();
+    } catch (err) {
+      console.error("Submit Error:", err);
+      alert("Failed to save listing");
+    }
   };
 
   const updateRequestStatus = async (id, status) => {
@@ -182,11 +218,12 @@ useEffect(() => {
       ...f,
       availableDate: f.availableDate?.slice(0, 10),
       imageFile: null,
-      priceType: f.price ? "paid" : "free",
+      // 💡 LOGIC: If price exists and is not "0", set type to paid
+      priceType: (f.price && f.price !== "0" && f.price !== 0) ? "paid" : "free",
       price: f.price || "",
     });
   };
-
+  
   const deleteFood = async (id) => {
     if (!window.confirm("Delete this food listing?")) return;
     await fetch(`${API}/api/food/${id}`, {
@@ -355,6 +392,21 @@ useEffect(() => {
                       <option value="paid">Paid</option>
                     </select>
                   </div>
+{/* Show this only if Paid is selected */}
+{form.priceType === "paid" && (
+  <div className="space-y-2 animate-in slide-in-from-left duration-300">
+    <label className="text-sm font-black text-gray-700 block uppercase">💵 Price (RS)</label>
+    <input 
+      type="number" 
+      placeholder="Enter amount"
+      className="w-full p-3 bg-blue-50 border border-blue-100 rounded-xl outline-none text-blue-600 font-bold" 
+      required 
+      value={form.price} 
+      onChange={(e) => setForm({ ...form, price: e.target.value })} 
+    />
+  </div>
+)}
+
                   <div className="space-y-2">
                     <label className="text-sm font-black text-gray-700 block uppercase tracking-tight">📸 Photo</label>
                     <input type="file" accept="image/*" className="w-full text-xs" onChange={(e) => setForm({ ...form, imageFile: e.target.files[0] })} />
