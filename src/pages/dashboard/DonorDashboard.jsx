@@ -9,6 +9,7 @@ import { io } from "socket.io-client";
 import ProfileCard from "../../components/ProfileCard";
 import ChatLayout from "../../components/chat/ChatLayout";
 import { useUser } from "../../context/UserContext";
+import LocationPicker from "../../components/LocationPicker"; 
 
 const API = "http://localhost:5000";
 
@@ -42,6 +43,9 @@ export default function DonorDashboard() {
     imageFile: null,
     priceType: "free",
     price: "",
+    pickupLocation: "Kathmandu", // This acts as the "Address" text
+  lat: 27.7172, // Default Latitude (Kathmandu)
+  lng: 85.3240, // Default Longitude
   });
 
   // ---------------- STATS CALCULATION ----------------
@@ -214,6 +218,11 @@ useEffect(() => {
   const startEdit = (f) => {
     setEditing(f);
     setShowForm(true);
+
+    const lat = f.location?.coordinates ? f.location.coordinates[1] : 27.7172;
+    const lng = f.location?.coordinates ? f.location.coordinates[0] : 85.3240;
+
+
     setForm({
       ...f,
       availableDate: f.availableDate?.slice(0, 10),
@@ -221,6 +230,9 @@ useEffect(() => {
       // 💡 LOGIC: If price exists and is not "0", set type to paid
       priceType: (f.price && f.price !== "0" && f.price !== 0) ? "paid" : "free",
       price: f.price || "",
+      lat: lat,
+      lng: lng,
+      pickupLocation: f.location?.address || f.pickupLocation || "",
     });
   };
   
@@ -411,6 +423,27 @@ useEffect(() => {
                     <label className="text-sm font-black text-gray-700 block uppercase tracking-tight">📸 Photo</label>
                     <input type="file" accept="image/*" className="w-full text-xs" onChange={(e) => setForm({ ...form, imageFile: e.target.files[0] })} />
                   </div>
+
+                  <div className="md:col-span-2 lg:col-span-3 space-y-4">
+  <label className="text-sm font-black text-gray-700 block uppercase">📍 Set Pickup Location</label>
+  
+  {/* The Map Component */}
+  <LocationPicker 
+    selectedPos={[form.lat, form.lng]} 
+    setSelectedPos={(pos) => setForm({ ...form, lat: pos[0], lng: pos[1] })} 
+    setSelectedAddress={(addr) => setForm(prev => ({ ...prev, pickupLocation: addr }))}
+  />
+
+  {/* Text Address Input */}
+  <input 
+    placeholder="Describe the area (e.g. Near City Center Mall)"
+    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" 
+    required 
+    value={form.pickupLocation} 
+    onChange={(e) => setForm({ ...form, pickupLocation: e.target.value })} 
+  />
+</div>
+
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-black text-gray-700 block uppercase">📝 Description</label>
@@ -464,7 +497,9 @@ useEffect(() => {
                       </div>
                       <div className="grid grid-cols-2 gap-y-3 gap-x-2 border-t border-gray-50 pt-4">
                         <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500"><FaWeightHanging className="text-gray-300" /> {f.weight} kg</div>
-                        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500"><FaMapMarkerAlt className="text-gray-300" /> {f.pickupLocation}</div>
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500">
+  <FaMapMarkerAlt className="text-gray-300" /> {f.location?.address || f.pickupLocation || "N/A"}
+</div> 
                         <div className="flex items-center gap-2 text-[10px] font-bold text-rose-400 col-span-2"><FaCalendarAlt /> Until: {new Date(f.availableDate).toLocaleDateString()}</div>
                       </div>
                       <div className="flex gap-2 pt-2">

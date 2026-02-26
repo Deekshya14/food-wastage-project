@@ -22,6 +22,7 @@ import { io } from "socket.io-client";
 import ProfileCard from "../../components/ProfileCard";
 import ChatLayout from "../../components/chat/ChatLayout";
 import { useUser } from "../../context/UserContext";
+import ReceiverFoodMap from "../../components/ReceiverFoodMap";
 
 const API = "http://localhost:5000";
 
@@ -43,12 +44,43 @@ export default function ReceiverDashboard() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
 
+  const [viewMode, setViewMode] = useState("grid"); // "grid" or "map"
+  const [userCoords, setUserCoords] = useState(null);
+
   // Filtering States
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
   const notificationRef = useRef();
 
+
+  // --- NEW LOCATION FUNCTIONS ---
+const getMyLocationAndFetch = () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      setUserCoords({ lat: latitude, lng: longitude });
+
+      try {
+        const res = await fetch(`${API}/api/food?lat=${latitude}&lng=${longitude}&dist=20000`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        
+        // 💡 SAFETY CHECK: Only set foods if data is actually an array
+        if (Array.isArray(data)) {
+          setFoods(data);
+        } else {
+          console.error("Backend returned an error instead of a list:", data);
+          setFoods([]); // Set to empty array so the app doesn't crash
+        }
+      } catch (err) {
+        console.error("Failed to fetch nearby food", err);
+        setFoods([]); 
+      }
+    });
+  }
+};
   // ---------------- FETCHING DATA ----------------
   const fetchData = async () => {
     try {
@@ -107,6 +139,8 @@ export default function ReceiverDashboard() {
         alert("Failed to request food.");
     }
   };
+
+  
 
   // ---------------- NEW: SUBMIT RATING LOGIC ----------------
   const handleSubmitReview = async () => {
@@ -321,7 +355,7 @@ export default function ReceiverDashboard() {
                                 <div className="flex-1 min-w-0">
                                   <h4 className="font-bold text-sm truncate text-slate-800">{r.foodId?.title}</h4>
                                   <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-0.5">
-                                    <FaMapMarkerAlt size={8} className="text-blue-400"/> {r.foodId?.pickupLocation}
+                                    <FaMapMarkerAlt size={8} className="text-blue-400"/> {r.foodId?.location?.address || r.foodId?.pickupLocation}
                                   </p>
                                 </div>
                               </div>
@@ -392,106 +426,137 @@ export default function ReceiverDashboard() {
         ) : (
           <div className="space-y-8">
             {/* SEARCH AND FILTER BAR */}
-            <div className="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-                <div className="relative flex-1 w-full">
-                    <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
-                    <input 
-                        type="text" 
-                        placeholder="Search by title or location (e.g. Kathmandu)..."
-                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                <div className="flex gap-2">
-                    {['all', 'biodegradable', 'non-biodegradable'].map(cat => (
-                        <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
-                            className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-gray-50 text-slate-400'
-                            }`}
-                        >
-                            {cat}
-                        </button>
-                    ))}
-                </div>
-            </div>
+<div className="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+  
+  {/* 1. Search Input */}
+  <div className="relative flex-1 w-full">
+    <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+    <input 
+      type="text" 
+      placeholder="Search by title or location..."
+      className="w-full pl-11 pr-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+    />
+  </div>
 
-            {/* BROWSE GRID */}
-            {/* BROWSE GRID */}
-<div className="grid md:grid-cols-2 xl:grid-cols-3 gap-8">
-  {filteredFoods.length > 0 ? (
-    filteredFoods.map(f => {
-      const myReq = requests.find(r => r.foodId?._id === f._id);
-      return (
-        <div key={f._id} className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm flex flex-col hover:shadow-xl transition-all duration-500 group">
-          <div className="h-56 overflow-hidden relative">
-            <img src={`${API}/uploads/${f.image}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
-            
-            {/* Overlay Location Tag */}
-            <div className="absolute top-4 left-4">
-              <span className="bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-black text-slate-800 shadow-lg flex items-center gap-1">
-                <FaMapMarkerAlt className="text-blue-500" /> {f.pickupLocation}
-              </span>
-            </div>
-          </div>
+  {/* 2. NEW: MAP/GRID TOGGLE */}
+  <div className="flex bg-gray-100 p-1 rounded-2xl">
+    <button 
+      onClick={() => setViewMode("grid")}
+      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
+        viewMode === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+      }`}
+    >
+      Grid
+    </button>
+    <button 
+      onClick={() => { setViewMode("map"); getMyLocationAndFetch(); }}
+      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${
+        viewMode === 'map' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+      }`}
+    >
+      Map
+    </button>
+  </div>
 
-          <div className="p-7 flex flex-col flex-1">
-            <div className="flex-1">
-              <h3 className="font-black text-xl text-slate-800 mb-1 leading-tight group-hover:text-blue-600 transition-colors">{f.title}</h3>
-              
-              {/* Description Snippet */}
-              <p className="text-xs text-gray-400 font-medium mb-4 line-clamp-2 italic">
-                {f.description || "No specific details provided by the donor."}
-              </p>
-
-              <div className="bg-slate-50/50 p-5 rounded-[2rem] border border-slate-50 mb-4">
-                <FoodMeta food={f} />
-              </div>
-
-              {/* Availability Date */}
-              <div className="flex items-center gap-2 text-[10px] font-bold text-rose-400 mb-6 px-1">
-                <FaClock /> Available until: {new Date(f.availableDate).toLocaleDateString()}
-              </div>
-            </div>
-
-            <button 
-              disabled={!!myReq}
-              onClick={() => requestFood(f._id)}
-              className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${
-                myReq 
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none" 
-                : "bg-blue-600 text-white hover:bg-slate-900 hover:-translate-y-1 active:scale-95"
-              }`}
-            >
-              {myReq ? `Request Pending` : "Request Food"}
-            </button>
-
-            <button 
-  onClick={() => {
-    // FIX: Use donorId instead of owner to match your backend model
-    const donorId = f.donorId?._id || f.donorId;
-    setChatPartnerId(donorId); 
-    setShowChat(true);
-  }}
-  className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"
-  title="Message Donor"
->
-  <FaComments size={18} />
-</button>
-
-          </div>
-        </div>
-      );
-    })
-  ) : (
-    <div className="col-span-full py-20 text-center">
-        <p className="text-slate-400 font-bold">No results found for this category or search.</p>
-    </div>
-  )}
+  {/* 3. Category Filters */}
+  <div className="flex gap-2">
+    {['all', 'biodegradable', 'non-biodegradable'].map(cat => (
+      <button
+        key={cat}
+        onClick={() => setSelectedCategory(cat)}
+        className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+          selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-gray-50 text-slate-400'
+        }`}
+      >
+        {cat}
+      </button>
+    ))}
+  </div>
 </div>
+{/* BROWSE SECTION: Switch between Map and Grid */}
+{viewMode === "map" ? (
+  /* 🗺️ OPTION A: Show the Map View */
+  <div className="w-full">
+    <ReceiverFoodMap 
+      foods={filteredFoods} 
+      onRequest={requestFood} 
+      API={API} 
+    />
+  </div>
+) : (
+  /* 🍱 OPTION B: Show your existing Grid View */
+  <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-8">
+    {filteredFoods.length > 0 ? (
+      filteredFoods.map(f => {
+        const myReq = requests.find(r => r.foodId?._id === f._id);
+        return (
+          <div key={f._id} className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm flex flex-col hover:shadow-xl transition-all duration-500 group">
+            <div className="h-56 overflow-hidden relative">
+              <img src={`${API}/uploads/${f.image}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
+              
+              {/* 📍 Updated Location Tag logic here */}
+              <div className="absolute top-4 left-4">
+                <span className="bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-black text-slate-800 shadow-lg flex items-center gap-1">
+                  <FaMapMarkerAlt className="text-blue-500" /> {f.location?.address || f.pickupLocation || "Location N/A"}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-7 flex flex-col flex-1">
+              <div className="flex-1">
+                <h3 className="font-black text-xl text-slate-800 mb-1 leading-tight group-hover:text-blue-600 transition-colors">{f.title}</h3>
+                <p className="text-xs text-gray-400 font-medium mb-4 line-clamp-2 italic">
+                  {f.description || "No specific details provided by the donor."}
+                </p>
+
+                <div className="bg-slate-50/50 p-5 rounded-[2rem] border border-slate-50 mb-4">
+                  <FoodMeta food={f} />
+                </div>
+
+                <div className="flex items-center gap-2 text-[10px] font-bold text-rose-400 mb-6 px-1">
+                  <FaClock /> Available until: {new Date(f.availableDate).toLocaleDateString()}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button 
+                  disabled={!!myReq}
+                  onClick={() => requestFood(f._id)}
+                  className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg ${
+                    myReq 
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none" 
+                    : "bg-blue-600 text-white hover:bg-slate-900 hover:-translate-y-1 active:scale-95"
+                  }`}
+                >
+                  {myReq ? `Request Pending` : "Request Food"}
+                </button>
+
+                <button 
+                  onClick={() => {
+                    const donorId = f.donorId?._id || f.donorId;
+                    setChatPartnerId(donorId); 
+                    setShowChat(true);
+                  }}
+                  className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"
+                  title="Message Donor"
+                >
+                  <FaComments size={18} />
+                </button>
+              </div>
+            </div>
           </div>
+        );
+      })
+    ) : (
+      <div className="col-span-full py-20 text-center">
+          <p className="text-slate-400 font-bold">No results found for this category or search.</p>
+      </div>
+    )}
+  </div>
+)}
+   </div>
         )}
       </main>
 
