@@ -66,8 +66,15 @@ router.get("/", authMiddleware, async (req, res) => {
     }
 
     // Use try/catch specifically for the find to see if index is missing
-    const foods = await Food.find(filter).sort(lat && lng ? {} : { createdAt: -1 });
-    res.json(foods);
+    let query = Food.find(filter);
+
+// 💡 If we ARE NOT searching by location, sort by newest first
+if (!lat || !lng) {
+  query = query.sort({ createdAt: -1 });
+}
+
+const foods = await query;
+res.json(foods);
   } catch (err) {
     console.error("BACKEND ERROR:", err.message); // This will show in your terminal
     res.status(500).json({ message: err.message });

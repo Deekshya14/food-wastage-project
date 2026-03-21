@@ -46,6 +46,7 @@ export default function ReceiverDashboard() {
 
   const [viewMode, setViewMode] = useState("grid"); // "grid" or "map"
   const [userCoords, setUserCoords] = useState(null);
+  const [maxDistance, setMaxDistance] = useState(10); // Default to 10km
 
   // Filtering States
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,26 +54,40 @@ export default function ReceiverDashboard() {
 
   const notificationRef = useRef();
 
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return (R * c).toFixed(1); // Returns distance in km rounded to 1 decimal
+};
+
 
   // --- NEW LOCATION FUNCTIONS ---
-const getMyLocationAndFetch = () => {
+// 1. Add 'dist' as a parameter with a fallback to our maxDistance state
+const getMyLocationAndFetch = (dist = maxDistance) => {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(async (pos) => {
       const { latitude, longitude } = pos.coords;
       setUserCoords({ lat: latitude, lng: longitude });
 
       try {
-        const res = await fetch(`${API}/api/food?lat=${latitude}&lng=${longitude}&dist=20000`, {
+        // 2. Use the 'dist' variable here (multiplied by 1000 for meters)
+        const res = await fetch(`${API}/api/food?lat=${latitude}&lng=${longitude}&dist=${dist * 1000}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
         
-        // 💡 SAFETY CHECK: Only set foods if data is actually an array
         if (Array.isArray(data)) {
           setFoods(data);
         } else {
           console.error("Backend returned an error instead of a list:", data);
-          setFoods([]); // Set to empty array so the app doesn't crash
+          setFoods([]); 
         }
       } catch (err) {
         console.error("Failed to fetch nearby food", err);
@@ -136,7 +151,7 @@ const getMyLocationAndFetch = () => {
         });
         fetchData();
     } catch (error) {
-        alert("Failed to request food.");
+        toast.error("Failed to request food.");
     }
   };
 
@@ -160,7 +175,7 @@ const getMyLocationAndFetch = () => {
         setRating(5);
         setComment("");
         fetchData(); // Refresh UI to show stars instead of button
-        alert("Feedback submitted! Thank you.");
+        toast.success("Feedback submitted! Thank you.");
       } else {
         const errorData = await response.json();
         alert(errorData.message || "Failed to submit review.");
@@ -174,11 +189,21 @@ const getMyLocationAndFetch = () => {
   // ---------------- FILTER LOGIC ----------------
   const filteredFoods = useMemo(() => {
     return foods.filter((f) => {
+      // 1. Get the title safely
+      const title = f.title?.toLowerCase() || "";
+      
+      // 2. Get the location safely (check both the old string and the new object)
+      const locationText = (f.location?.address || f.pickupLocation || "").toLowerCase();
+      
+      const search = searchTerm.toLowerCase();
+
       const matchesSearch = 
-        f.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        f.pickupLocation.toLowerCase().includes(searchTerm.toLowerCase());
+        title.includes(search) || 
+        locationText.includes(search);
+
       const matchesCategory = selectedCategory === "all" || f.wasteCategory === selectedCategory;
       const isAvailable = f.status !== "completed"; 
+      
       return matchesSearch && matchesCategory && isAvailable;
     });
   }, [foods, searchTerm, selectedCategory]);
@@ -460,6 +485,29 @@ const getMyLocationAndFetch = () => {
     </button>
   </div>
 
+  {/* 📍 RADIUS SLIDER SECTION */}
+<div className="flex flex-col gap-1 min-w-[140px] px-4 border-l border-gray-100">
+  <div className="flex justify-between items-center">
+    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Radius</span>
+    <span className="text-[10px] font-bold text-blue-600">{maxDistance} km</span>
+  </div>
+  <input 
+    type="range" 
+    min="1" 
+    max="50" 
+    value={maxDistance} 
+    onChange={(e) => {
+      const val = parseInt(e.target.value);
+      setMaxDistance(val);
+      // Automatically refresh results when slider moves
+      if (userCoords) {
+        getMyLocationAndFetch(val);
+      }
+    }}
+    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-slate-900 hover:accent-blue-600 transition-all"
+  />
+</div>
+
   {/* 3. Category Filters */}
   <div className="flex gap-2">
     {['all', 'biodegradable', 'non-biodegradable'].map(cat => (
@@ -483,6 +531,7 @@ const getMyLocationAndFetch = () => {
       foods={filteredFoods} 
       onRequest={requestFood} 
       API={API} 
+      userCoords={userCoords}
     />
   </div>
 ) : (
@@ -499,8 +548,21 @@ const getMyLocationAndFetch = () => {
               {/* 📍 Updated Location Tag logic here */}
               <div className="absolute top-4 left-4">
                 <span className="bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-black text-slate-800 shadow-lg flex items-center gap-1">
-                  <FaMapMarkerAlt className="text-blue-500" /> {f.location?.address || f.pickupLocation || "Location N/A"}
-                </span>
+  <FaMapMarkerAlt className="text-blue-500" /> 
+  {f.location?.address || f.pickupLocation}
+  
+  {/* 📍 New Distance Label */}
+  {userCoords && f.location?.coordinates && (
+    <span className="ml-2 pl-2 border-l border-gray-200 text-blue-600">
+      {calculateDistance(
+        userCoords.lat, 
+        userCoords.lng, 
+        f.location.coordinates[1], 
+        f.location.coordinates[0]
+      )} km away
+    </span>
+  )}
+</span>
               </div>
             </div>
 

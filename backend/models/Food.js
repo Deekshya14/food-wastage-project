@@ -2,7 +2,11 @@ import mongoose from "mongoose";
 
 const foodSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true },
+    title: { type: String,
+    required: [true, "Title is required"],
+    trim: true,
+    minlength: [3, "Title must be at least 3 characters"],
+    maxlength: [50, "Title cannot exceed 50 characters"] },
     description: String,
     wasteCategory: {
       type: String,
@@ -27,6 +31,7 @@ const foodSchema = new mongoose.Schema(
     weight: {
       type: Number,
       required: true,
+      min: [0.1, "Weight must be at least 100 grams"]
     },
 
     // --- 📍 NEW LOCATION STRUCTURE ---
@@ -48,9 +53,15 @@ const foodSchema = new mongoose.Schema(
     // ---------------------------------
 
     availableDate: {
-      type: Date,
-      required: true,
-    },
+    type: Date,
+    required: true,
+    validate: {
+      validator: function(v) {
+        return v >= new Date().setHours(0,0,0,0);
+      },
+      message: "Available date cannot be in the past!"
+    }
+  },
     priceType: {
       type: String,
       enum: ["free", "paid"],
@@ -59,6 +70,7 @@ const foodSchema = new mongoose.Schema(
     price: {
       type: Number,
       default: 0,
+      min: [0, "Price cannot be negative"]
     },
     image: String,
     status: {

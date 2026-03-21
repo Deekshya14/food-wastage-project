@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import toast, { Toaster } from 'react-hot-toast';
 import { 
   FaPlus, FaEdit, FaTrash, FaComments, FaBox, 
   FaClock, FaCheckCircle, FaMapMarkerAlt, FaWeightHanging, 
@@ -22,6 +23,11 @@ export default function DonorDashboard() {
   const [editing, setEditing] = useState(null);
   const [processingRequest, setProcessingRequest] = useState(null);
 
+const getTodayDate = () => {
+  const today = new Date();
+  return today.toISOString().split('T')[0]; // Returns "2026-03-16"
+};
+
   // Notifications State
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -39,7 +45,7 @@ export default function DonorDashboard() {
     condition: "fresh",
     weight: 1,
     pickupLocation: "Kathmandu",
-    availableDate: "",
+    availableDate: getTodayDate(),
     imageFile: null,
     priceType: "free",
     price: "",
@@ -90,6 +96,48 @@ export default function DonorDashboard() {
     }
   };
 
+  const clearAllNotifications = () => {
+  // Clear the UI state
+  setNotifications([]);
+  // Close the notification dropdown
+  setShowNotifications(false);
+  // Remove any popping toast alerts from the screen
+  toast.dismiss(); 
+};
+
+
+const handleLocationSearch = async (query) => {
+  if (!query) return;
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`
+    );
+    const data = await response.json();
+
+    if (data && data.length > 0) {
+      const { lat, lon, display_name } = data[0];
+      const newLat = parseFloat(lat);
+      const newLng = parseFloat(lon);
+
+      // Update the form state
+      setForm((prev) => ({
+        ...prev,
+        lat: newLat,
+        lng: newLng,
+        pickupLocation: display_name, // Auto-fills the address box with the full name
+      }));
+      
+      toast.success(`Found: ${display_name.split(',')[0]}`);
+    } else {
+      toast.error("Location not found. Try being more specific.");
+    }
+  } catch (err) {
+    console.error("Search Error:", err);
+    toast.error("Search service unavailable");
+  }
+};
+
   // SOCKET ---
 useEffect(() => {
   if (!user?._id) return; // Wait until user is loaded
@@ -105,34 +153,80 @@ useEffect(() => {
   });
 
   socket.on("newNotification", (data) => {
-    console.log("🔔 Notification Received:", data);
-    
+    // 1. Trigger the Visual Toast
+    toast.success(data.message, {
+      duration: 5000,
+      position: 'top-right',
+      icon: '🔔',
+      style: {
+        borderRadius: '15px',
+        background: '#333',
+        color: '#fff',
+        fontSize: '12px',
+        fontWeight: 'bold'
+      },
+    });
+
+    // 2. Update the notification list
     setNotifications(prev => [{
       id: Date.now(),
       message: data.message,
       time: new Date()
     }, ...prev]);
     
-    // Automatically refresh the request cards
-    fetchRequests();
-  });
-
-  socket.on("requestStatusUpdate", () => {
+    // 3. Refresh lists automatically
     fetchRequests();
   });
 
   return () => socket.disconnect();
 }, [user?._id]);
-
   useEffect(() => {
     if (user?._id && token) {
       fetchFoods();
       fetchRequests();
     }
   }, [user, token]);
+
+
+// --- AUTO-DETECT LOCATION ---
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          // Update the form state so the map starts at the user's current spot
+          setForm((prev) => ({
+            ...prev,
+            lat: latitude,
+            lng: longitude,
+          }));
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          // If they deny permission, it stays at the default Kathmandu coords
+        }
+      );
+    }
+  }, []); // Runs once on load
+
   // ---------------- HANDLERS ----------------
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // 🛑 LOGICAL VALIDATIONS
+  if (!form.lat || !form.lng) {
+    return toast.error("Please pick a location on the map!");
+  }
+
+  if (form.priceType === "paid" && (!form.price || form.price <= 0)) {
+    return toast.error("Please enter a valid price for a paid listing.");
+  }
+
+  if (!form.imageFile && !editing) {
+    return toast.error("Please upload a photo of the food.");
+  }
+
+  
     const body = new FormData();
     
     // Create the final data to send
@@ -176,10 +270,11 @@ useEffect(() => {
           condition: "fresh",
           weight: 1,
           pickupLocation: "Kathmandu",
-          availableDate: "",
+          availableDate: getTodayDate(),
           imageFile: null,
           priceType: "free",
           price: "",
+          
         });
         fetchFoods();
       }
@@ -247,6 +342,7 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
+      <Toaster />
       <div className="max-w-7xl mx-auto grid lg:grid-cols-4 gap-8">
         
         {/* SIDEBAR */}
@@ -289,8 +385,13 @@ useEffect(() => {
               >
                 <FaBell size={20} />
                 {notifications.length > 0 && (
-                  <span className="absolute top-3 right-3 w-3 h-3 bg-rose-500 border-2 border-white rounded-full"></span>
-                )}
+  <span className="absolute top-3 right-3 flex h-3 w-3">
+    {/* The Ripple/Pulse effect */}
+    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+    {/* The Solid Dot */}
+    <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-white"></span>
+  </span>
+)}
               </button>
 
               {showNotifications && (
@@ -307,7 +408,12 @@ useEffect(() => {
                       ))
                     )}
                   </div>
-                  <button onClick={() => setNotifications([])} className="w-full mt-4 py-2 text-[10px] font-black uppercase text-rose-500 hover:bg-rose-50 rounded-lg">Clear All</button>
+                  <button 
+  onClick={clearAllNotifications} 
+  className="w-full mt-4 py-2 text-[10px] font-black uppercase text-rose-500 hover:bg-rose-50 rounded-lg transition-all active:scale-95"
+>
+  Clear All
+</button>
                 </div>
               )}
             </div>
@@ -356,11 +462,13 @@ useEffect(() => {
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-black text-gray-700 block uppercase">🏷️ Title</label>
-                    <input className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                    <input className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" required minLength="3" 
+  maxLength="50" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-black text-gray-700 block uppercase">⚖️ Weight (KG)</label>
-                    <input type="number" step="0.1" className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} />
+                    <input type="number" min="0.1" 
+  max="500" step="0.1" className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-black text-gray-700 block uppercase">♻️ Category</label>
@@ -395,7 +503,14 @@ useEffect(() => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-black text-gray-700 block uppercase">📅 Available Until</label>
-                    <input type="date" className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" required value={form.availableDate} onChange={(e) => setForm({ ...form, availableDate: e.target.value })} />
+                    <input 
+  type="date" 
+  className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" 
+  required 
+  min={getTodayDate()} // 👈 This disables past dates in the calendar
+  value={form.availableDate} 
+  onChange={(e) => setForm({ ...form, availableDate: e.target.value })} 
+/>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-black text-gray-700 block uppercase">💰 Price Type</label>
@@ -410,6 +525,7 @@ useEffect(() => {
     <label className="text-sm font-black text-gray-700 block uppercase">💵 Price (RS)</label>
     <input 
       type="number" 
+      min="1"
       placeholder="Enter amount"
       className="w-full p-3 bg-blue-50 border border-blue-100 rounded-xl outline-none text-blue-600 font-bold" 
       required 
@@ -424,17 +540,44 @@ useEffect(() => {
                     <input type="file" accept="image/*" className="w-full text-xs" onChange={(e) => setForm({ ...form, imageFile: e.target.files[0] })} />
                   </div>
 
-                  <div className="md:col-span-2 lg:col-span-3 space-y-4">
+                 <div className="md:col-span-2 lg:col-span-3 space-y-4">
   <label className="text-sm font-black text-gray-700 block uppercase">📍 Set Pickup Location</label>
   
-  {/* The Map Component */}
-  <LocationPicker 
-    selectedPos={[form.lat, form.lng]} 
-    setSelectedPos={(pos) => setForm({ ...form, lat: pos[0], lng: pos[1] })} 
-    setSelectedAddress={(addr) => setForm(prev => ({ ...prev, pickupLocation: addr }))}
-  />
+  {/* Container for Map + Search Bar */}
+  <div className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-inner">
+    
+    {/* 🔍 SEARCH OVERLAY BAR */}
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-[90%] md:w-2/3 flex gap-2">
+      <input 
+        id="map-search-input"
+        type="text"
+        placeholder="Search for a place (e.g. Balaju, Kathmandu)..."
+        className="flex-1 p-3 bg-white/90 backdrop-blur-md border border-white shadow-xl rounded-xl outline-none text-xs font-bold"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleLocationSearch(e.target.value);
+          }
+        }}
+      />
+      <button 
+        type="button"
+        onClick={() => handleLocationSearch(document.getElementById('map-search-input').value)}
+        className="bg-slate-900 text-white px-4 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all"
+      >
+        Search
+      </button>
+    </div>
 
-  {/* Text Address Input */}
+    {/* The Map Component */}
+    <LocationPicker 
+      selectedPos={[form.lat, form.lng]} 
+      setSelectedPos={(pos) => setForm({ ...form, lat: pos[0], lng: pos[1] })} 
+      setSelectedAddress={(addr) => setForm(prev => ({ ...prev, pickupLocation: addr }))}
+    />
+  </div>
+
+  {/* Text Address Input (Auto-filled by search or map click) */}
   <input 
     placeholder="Describe the area (e.g. Near City Center Mall)"
     className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none" 
@@ -534,53 +677,107 @@ useEffect(() => {
           </div>
 
           {/* REQUESTS PIPELINE */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
-              <FaClock className="text-amber-500" /> Incoming Requests
-            </h2>
-            <div className="grid md:grid-cols-3 gap-6 items-start">
-              {['pending', 'approved', 'rejected'].map(statusType => (
-                <div key={statusType} className="space-y-4">
-                  <div className="flex items-center justify-between px-2">
-                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{statusType}</span>
-                    <span className="bg-gray-200 text-gray-600 text-[10px] font-black px-2 py-0.5 rounded-full">{requests.filter(r => r.status === statusType).length}</span>
-                  </div>
-                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                    {requests.filter(r => r.status === statusType).map(req => (
-                      <div key={req._id} className={`p-5 rounded-[2rem] border shadow-sm space-y-4 ${statusType === 'approved' ? 'bg-emerald-50/30 border-emerald-100' : 'bg-white border-gray-100'}`}>
-                        <div className="flex items-center gap-3">
-                          <img src={`${API}/uploads/${req.foodId?.image}`} className="w-12 h-12 rounded-2xl object-cover" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-black truncate text-gray-800">{req.foodId?.title}</p>
-                            <p className="text-[10px] font-bold text-blue-500 truncate">By: {req.receiverId?.fullName}</p>
-                          </div>
-                        </div>
-
-                        {statusType === 'pending' && (
-                          <div className="flex gap-2 pt-1">
-                            <button disabled={processingRequest === req._id} onClick={() => updateRequestStatus(req._id, "approved")} className="flex-1 py-2.5 bg-emerald-500 text-white text-[10px] font-black uppercase rounded-xl shadow-lg">
-                              {processingRequest === req._id ? "..." : "Approve"}
-                            </button>
-                            <button onClick={() => updateRequestStatus(req._id, "rejected")} className="flex-1 py-2.5 bg-rose-50 text-rose-500 text-[10px] font-black uppercase rounded-xl">Reject</button>
-                          </div>
-                        )}
-
-                        {statusType === 'approved' && (
-                          <button onClick={() => updateRequestStatus(req._id, "completed")} className="w-full py-3 bg-emerald-600 text-white text-[10px] font-black uppercase rounded-xl flex items-center justify-center gap-2">
-                            <FaHandshake size={14}/> Collected
-                          </button>
-                        )}
-
-                        <button onClick={() => { setChatPartnerId(req.receiverId?._id); setShowChat(true); }} className="w-full py-3 bg-gray-50 text-gray-500 text-[10px] font-black uppercase rounded-xl flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all">
-                          <FaComments /> Message
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+<div className="space-y-4">
+  <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+    <FaClock className="text-amber-500" /> Incoming Requests
+  </h2>
+  <div className="grid md:grid-cols-3 gap-6 items-start">
+    {['pending', 'approved', 'rejected'].map(statusType => (
+      <div key={statusType} className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+          <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{statusType}</span>
+          <span className="bg-gray-200 text-gray-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+            {requests.filter(r => r.status === statusType).length}
+          </span>
+        </div>
+        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+          {requests.filter(r => r.status === statusType).map(req => (
+            <div 
+              key={req._id} 
+              className={`p-5 rounded-[2.5rem] border shadow-sm space-y-4 transition-all ${
+                statusType === 'approved' ? 'bg-emerald-50/40 border-emerald-100 shadow-emerald-100/50' : 'bg-white border-gray-100'
+              }`}
+            >
+              {/* Header: Food Image & Receiver Name */}
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <img 
+                    src={`${API}/uploads/${req.foodId?.image}`} 
+                    className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-sm" 
+                    alt="food" 
+                  />
+                  {statusType === 'approved' && (
+                    <div className="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full p-1 border-2 border-white">
+                      <FaCheckCircle size={8} />
+                    </div>
+                  )}
                 </div>
-              ))}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-black truncate text-slate-800 uppercase tracking-tight">
+                    {req.foodId?.title}
+                  </p>
+                  <p className="text-[10px] font-bold text-blue-500 flex items-center gap-1">
+                    <span className="opacity-50">By:</span> {req.receiverId?.fullName}
+                  </p>
+                </div>
+              </div>
+
+              {/* 📩 Receiver's Note (Optional - for when we add the message field) */}
+              {req.message && (
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 relative">
+                  <p className="text-[10px] text-slate-500 italic leading-relaxed font-medium">
+                    "{req.message}"
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons based on Status */}
+              <div className="space-y-2">
+                {statusType === 'pending' && (
+                  <div className="flex gap-2">
+                    <button 
+                      disabled={processingRequest === req._id} 
+                      onClick={() => updateRequestStatus(req._id, "approved")} 
+                      className="flex-[2] py-3 bg-emerald-500 text-white text-[10px] font-black uppercase rounded-xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-all active:scale-95"
+                    >
+                      {processingRequest === req._id ? "..." : "Approve"}
+                    </button>
+                    <button 
+                      onClick={() => updateRequestStatus(req._id, "rejected")} 
+                      className="flex-1 py-3 bg-rose-50 text-rose-500 text-[10px] font-black uppercase rounded-xl hover:bg-rose-100 transition-all"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+
+                {statusType === 'approved' && (
+                  <button 
+                    onClick={() => updateRequestStatus(req._id, "completed")} 
+                    className="w-full py-3.5 bg-slate-900 text-white text-[10px] font-black uppercase rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all shadow-xl shadow-slate-200"
+                  >
+                    <FaHandshake size={14}/> Confirm Handover
+                  </button>
+                )}
+
+                <button 
+                  onClick={() => { setChatPartnerId(req.receiverId?._id); setShowChat(true); }} 
+                  className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase transition-all ${
+                    statusType === 'approved' 
+                    ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200' 
+                    : 'bg-gray-50 text-gray-500 hover:bg-slate-900 hover:text-white'
+                  }`}
+                >
+                  <FaComments /> {statusType === 'approved' ? "Coordinate Pickup" : "Message"}
+                </button>
+              </div>
             </div>
-          </div>
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+</div>
 
           {/* HISTORY & RATINGS */}
           <div className="pt-8 space-y-4">

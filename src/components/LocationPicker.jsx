@@ -1,5 +1,5 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import React, { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -11,6 +11,20 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function LocationPicker({ selectedPos, setSelectedPos, setSelectedAddress }) {
   
+
+
+  // 📍 THIS IS THE FIX: A helper to move the map view
+  function RecenterMap({ position }) {
+    const map = useMap();
+    useEffect(() => {
+      if (position) {
+        map.setView(position, 13, { animate: true }); // Moves the camera to the new spot
+      }
+    }, [position]);
+    return null;
+  }
+
+
   function ClickHandler() {
     useMapEvents({
       async click(e) {
@@ -47,6 +61,7 @@ export default function LocationPicker({ selectedPos, setSelectedPos, setSelecte
     <div className="h-64 w-full rounded-2xl overflow-hidden shadow-inner border border-gray-200">
       <MapContainer center={selectedPos} zoom={13} style={{ height: '100%', width: '100%' }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <RecenterMap position={selectedPos} />
         <Marker position={selectedPos} />
         <ClickHandler />
       </MapContainer>
