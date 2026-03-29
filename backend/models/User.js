@@ -14,8 +14,22 @@ const userSchema = new mongoose.Schema(
       default: "receiver",
     },
 
+    status: {
+    type: String,
+    enum: ["active", "banned"],
+    default: "active"
+  }, 
     organization: { type: String, default: "" },
     avatar: { type: String, default: "" },
+
+    // 📩 NEW OTP & VERIFICATION FIELDS
+    isVerified: { type: Boolean, default: false },
+    otp: { type: String },
+    otpExpires: { type: Date },
+
+    // 🔑 FORGOT PASSWORD FIELDS
+    resetPasswordOTP: { type: String },
+    resetPasswordExpires: { type: Date },
 
     // 🔴 NEW FIELD (IMPORTANT)
     isApproved: {

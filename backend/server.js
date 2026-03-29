@@ -11,12 +11,15 @@ import requestRoutes from "./routes/request.js";
 import userRoutes from "./routes/users.js";
 import messageRoutes from "./routes/message.js";
 import notificationRoutes from "./routes/notification.js";
-
+import paymentRoutes from "./routes/payment.js"; 
+// Note: In ES modules, you MUST include the ".js" extension in the path.
+import adminReportRoutes from "./routes/adminRoutes.js";
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
 
 const io = new Server(server, {
   cors: { origin: "http://localhost:5173" },
@@ -25,6 +28,8 @@ const io = new Server(server, {
 app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
+ 
+app.use("/api/reports", adminReportRoutes);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/food", foodRoutes);
@@ -33,6 +38,7 @@ app.use("/api/requests", requestRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/payment", paymentRoutes);
 
 mongoose
   .connect(process.env.MONGO_URI)
@@ -85,6 +91,39 @@ socket.on("joinRoom", (roomName) => {
     });
   }
 });
+
+
+socket.on("typing", ({ receiverId, userId }) => {
+  const receiverSocketId = onlineUsers[receiverId];
+  if (receiverSocketId) {
+    socket.to(receiverSocketId).emit("userTyping", { userId });
+  }
+});
+
+socket.on("stopTyping", ({ receiverId, userId }) => {
+  const receiverSocketId = onlineUsers[receiverId];
+  if (receiverSocketId) {
+    socket.to(receiverSocketId).emit("userStoppedTyping", { userId });
+  }
+});
+
+
+
+socket.on("messageSeen", async ({ messageId, senderId }) => {
+  try {
+    // Update DB
+    await mongoose.model("Message").findByIdAndUpdate(messageId, { seen: true });
+    
+    // Notify the sender that their message was seen
+    const senderSocketId = onlineUsers[senderId];
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("messageReadUpdate", { messageId });
+    }
+  } catch (err) {
+    console.error("Error updating seen status:", err);
+  }
+});
+
 
   // --- HANDLE DISCONNECT ---
   socket.on("disconnect", () => {

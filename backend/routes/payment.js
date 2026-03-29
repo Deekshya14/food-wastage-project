@@ -1,34 +1,33 @@
 import express from "express";
-import axios from "axios";
-import Request from "../models/Request.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/verify-khalti", authMiddleware, async (req, res) => {
-  const { token, amount, requestId } = req.body;
+router.post("/initiate", async (req, res) => {
+  const { foodId, amount, foodTitle } = req.body;
 
   try {
-    const response = await axios.post(
-      "https://khalti.com/api/v2/payment/verify/",
-      { token, amount },
-      {
-        headers: { 
-          Authorization: `Key ${process.env.KHALTI_SECRET_KEY}` 
-        },
-      }
-    );
+    const response = await fetch("https://dev.khalti.com/api/v2/epayment/initiate/", {
+      method: "POST",
+      headers: {
+        "Authorization": "Key 01dcdf9f569d416b9eb2811fda8889fc",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        return_url: "http://localhost:5173/payment/success",
+        website_url: "http://localhost:5173",
+        amount: amount * 100,
+        purchase_order_id: foodId,
+        purchase_order_name: foodTitle,
+      }),
+    });
 
-    if (response.data) {
-      // Payment Successful! Update the request status
-      await Request.findByIdAndUpdate(requestId, { 
-        paymentStatus: "paid",
-        transactionId: response.data.idx 
-      });
-      res.json({ success: true, message: "Payment Verified" });
-    }
+    const data = await response.json();
+    console.log("Khalti Response:", data);
+    res.json(data);
+
   } catch (err) {
-    res.status(500).json({ message: "Payment Verification Failed" });
+    console.error("Khalti Error:", err);
+    res.status(500).json({ error: "Payment initiation failed" });
   }
 });
 

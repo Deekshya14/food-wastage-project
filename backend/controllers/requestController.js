@@ -1,5 +1,22 @@
 import Request from "../models/Request.js";
 import Food from "../models/Food.js";
+import Notification from "../models/Notification.js"; // Import your notification model
+
+// HELPER FUNCTION to send notifications (saves space)
+const sendNotification = async (io, userId, type, message, relatedId) => {
+  try {
+    const notif = await Notification.create({
+      userId,
+      type,
+      message,
+      relatedId,
+    });
+    // Emit to the specific user's room (matching your socket.emit("joinRoom", user._id))
+    io.to(userId.toString()).emit("newNotification", notif);
+  } catch (err) {
+    console.error("Notification Error:", err);
+  }
+};
 
 export const createRequest = async (req, res) => {
   try {
@@ -15,6 +32,17 @@ export const createRequest = async (req, res) => {
     if (existing) return res.status(400).json({ message: "You already requested" });
 
     const reqDoc = await Request.create({ foodId, donorId, receiverId, message });
+
+    // --- NOTIFY DONOR ---
+    const io = req.app.get("io");
+    await sendNotification(
+      io, 
+      donorId, 
+      "request_new", 
+      `New request for your listing: "${food.title}"`, 
+      reqDoc._id
+    );
+
     res.status(201).json(reqDoc);
   } catch (err) {
     console.error(err);
@@ -22,69 +50,85 @@ export const createRequest = async (req, res) => {
   }
 };
 
-// donor gets requests for his foods
-export const getRequestsForDonor = async (req, res) => {
-  try {
-    const donorId = req.user.id;
-    const requests = await Request.find({ donorId }).populate("foodId").populate("receiverId", "fullName phone city");
-    res.json(requests);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Cannot fetch requests" });
-  }
-};
-
 export const updateRequestStatus = async (req, res) => {
   try {
-    const { status } = req.body; // 'approved', 'rejected', or 'completed'
+    const { status } = req.body;
     const reqDoc = await Request.findById(req.params.id);
-    
     if (!reqDoc) return res.status(404).json({ message: "Request not found" });
 
     const food = await Food.findById(reqDoc.foodId);
-    
-    // Security check: Only the donor who owns the food can update the request
     if (food.donorId.toString() !== req.user.id) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    // Update the specific request status
     reqDoc.status = status;
     await reqDoc.save();
 
+    const io = req.app.get("io");
+
     // --- LOGIC: WHEN APPROVED ---
     if (status === "approved") {
-      // 1. Mark food as 'reserved' or 'picked' so it's hidden from search
       food.status = "reserved"; 
       await food.save();
 
-      // 2. AUTOMATION: Reject all other pending requests for this specific food
-      // This keeps your dashboard clean and notifies other users immediately
-      await Request.updateMany(
-        { 
-          foodId: reqDoc.foodId, 
-          _id: { $ne: reqDoc._id }, // Don't reject the one we just approved
-          status: "pending" 
-        },
-        { status: "rejected" }
+      // Notify the Approved Receiver
+      await sendNotification(
+        io, 
+        reqDoc.receiverId, 
+        "request_approved", 
+        `Your request for "${food.title}" was approved! Check pickup details.`, 
+        reqDoc._id
       );
+
+      // Automation: Reject others and notify them
+      const others = await Request.find({ 
+        foodId: reqDoc.foodId, 
+        _id: { $ne: reqDoc._id }, 
+        status: "pending" 
+      });
+
+      for (let otherReq of others) {
+        otherReq.status = "rejected";
+        await otherReq.save();
+        await sendNotification(
+          io, 
+          otherReq.receiverId, 
+          "request_rejected", 
+          `Sorry, the food "${food.title}" is no longer available.`, 
+          otherReq._id
+        );
+      }
     }
 
-    // --- LOGIC: WHEN COMPLETED (Handover Done) ---
+    // --- LOGIC: WHEN COMPLETED ---
     if (status === "completed") {
-      food.status = "completed"; // Officially close the listing
+      food.status = "completed";
       await food.save();
+      
+      await sendNotification(
+        io, 
+        reqDoc.receiverId, 
+        "request_completed", 
+        `Donation completed! Thank you for reducing food waste.`, 
+        reqDoc._id
+      );
     }
 
     // --- LOGIC: WHEN REJECTED ---
     if (status === "rejected") {
-      // If the food was 'reserved' but the donor rejected it later, 
-      // we might want to make it 'available' again.
       const otherApproved = await Request.findOne({ foodId: food._id, status: "approved" });
       if (!otherApproved) {
         food.status = "available";
         await food.save();
       }
+
+      await sendNotification(
+        io, 
+        reqDoc.receiverId, 
+        "request_rejected", 
+        `Your request for "${food.title}" was declined by the donor.`, 
+        reqDoc._id
+      );
     }
 
     res.json(reqDoc);

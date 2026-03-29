@@ -1,8 +1,9 @@
 import express from "express";
 import Food from "../models/Food.js";
 import { upload } from "../middleware/upload.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
+import { authMiddleware,adminMiddleware } from "../middleware/authMiddleware.js";
 import Request from "../models/Request.js";
+import Log from "../models/Log.js";
 
 const router = express.Router();
 
@@ -27,6 +28,8 @@ router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
       image: req.file?.filename,
       status: "available",
       
+
+      
       // 📍 NEW STRUCTURE
       location: {
         type: "Point",
@@ -34,6 +37,13 @@ router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
         address: pickupLocation // This is the text description (e.g., "Near Kathmandu Mall")
       }
     });
+
+    // 🔥 CREATE LOG
+    await Log.create({
+      action: "New Listing",
+      details: `Donor ${req.user.fullName || 'User'} posted: ${req.body.title}`,
+    });
+
     res.status(201).json(food);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -143,9 +153,58 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     await Request.deleteMany({ foodId: food._id });
     await Food.findByIdAndDelete(food._id);
 
+    // 🔥 CREATE LOG
+    await Log.create({
+      action: "Listing Removed",
+      details: `Admin deleted listing: ${food?.title || 'Unknown Item'}`,
+    });
+
     res.json({ message: "Food and related requests deleted" });
   } catch (err) {
     res.status(500).json({ message: "Delete failed" });
+  }
+});
+
+
+/* ================= ADMIN: LISTING MANAGEMENT ================= */
+
+// --- ADMIN: GET ALL LISTINGS ---
+router.get("/all", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    // Populate donorId to show the donor's name in the admin table
+    const allFood = await Food.find()
+      .populate("donorId", "fullName email") 
+      .sort({ createdAt: -1 });
+    res.json(allFood);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching all listings" });
+  }
+});
+
+// --- ADMIN: FORCE DELETE LISTING ---
+router.delete("/admin-delete/:id", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const foodId = req.params.id;
+    
+    // 1. Delete the food item
+    await Food.findByIdAndDelete(foodId);
+    
+    // 2. Delete any requests associated with this food (Cleanup)
+    await Request.deleteMany({ foodId: foodId });
+
+    res.json({ message: "Listing and related requests removed by Admin" });
+  } catch (err) {
+    res.status(500).json({ message: "Admin delete failed" });
+  }
+});
+
+// GET ALL LOGS (Admin Only)
+router.get("/logs", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const logs = await Log.find().sort({ createdAt: -1 }).limit(50);
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ message: "Could not fetch logs" });
   }
 });
 

@@ -5,6 +5,7 @@ import {
   authMiddleware,
   adminMiddleware
 } from "../middleware/authMiddleware.js";
+import Log from "../models/Log.js";
 
 const router = express.Router();
 
@@ -70,17 +71,44 @@ router.get(
   }
 );
 
-router.patch(
-  "/approve/:id",
-  authMiddleware,
-  adminMiddleware,
-  async (req, res) => {
-    await User.findByIdAndUpdate(req.params.id, {
-      isApproved: true
+router.patch("/approve/:id", authMiddleware, adminMiddleware, async (req, res) => {
+    const user = await User.findByIdAndUpdate(req.params.id, { isApproved: true });
+    
+    // 🔥 CREATE LOG
+    await Log.create({
+      action: "Donor Approved",
+      details: `Admin approved donor account for: ${user.fullName}`,
     });
 
     res.json({ message: "Donor approved successfully" });
+});
+
+/* ================= ADMIN: USER MANAGEMENT ================= */
+
+// --- ADMIN: TOGGLE USER STATUS (BAN/UNBAN) ---
+router.patch("/status/:id", authMiddleware, adminMiddleware, async (req, res) => {
+    const user = await User.findById(req.params.id);
+    const newStatus = user.status === "banned" ? "active" : "banned";
+    user.status = newStatus;
+    await user.save();
+
+    // 🔥 CREATE LOG
+    await Log.create({
+      action: newStatus === "banned" ? "User Suspended" : "User Restored",
+      details: `Admin changed ${user.fullName}'s status to ${newStatus}`,
+    });
+
+    res.json({ message: `User is now ${newStatus}`, status: newStatus });
+});
+
+// --- ADMIN: GET ALL USERS ---
+router.get("/all", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const users = await User.find().select("-password").sort({ createdAt: -1 });
+    res.json(users);
+  } catch (e) {
+    res.status(500).json({ message: "Error fetching users" });
   }
-);
+});
 
 export default router;

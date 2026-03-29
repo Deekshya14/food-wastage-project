@@ -47,12 +47,23 @@ router.get("/conversations", authMiddleware, async (req, res) => {
 /* ================================
    ✅ 2. GET MESSAGES WITH SPECIFIC USER
    ================================ */
+/* ✅ GET MESSAGES WITH SPECIFIC USER (AND MARK AS SEEN) */
 router.get("/:userId", authMiddleware, async (req, res) => {
   try {
+    const currentUserId = req.user.id;
+    const partnerId = req.params.userId;
+
+    // 1️⃣ Mark all unread messages from the partner as seen
+    await Message.updateMany(
+      { sender: partnerId, receiver: currentUserId, seen: false },
+      { $set: { seen: true } }
+    );
+
+    // 2️⃣ Fetch history
     const messages = await Message.find({
       $or: [
-        { sender: req.user.id, receiver: req.params.userId },
-        { sender: req.params.userId, receiver: req.user.id },
+        { sender: currentUserId, receiver: partnerId },
+        { sender: partnerId, receiver: currentUserId },
       ],
     })
       .sort({ createdAt: 1 })

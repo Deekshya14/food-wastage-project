@@ -4,8 +4,8 @@ import LandingPage from "./pages/LandingPage";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
 import { UserProvider } from "./context/UserContext";
-import Chat from "./pages/dashboard/Chat"; // <-- new chat component
-
+import Chat from "./pages/dashboard/Chat";
+import PaymentSuccess from "./pages/PaymentSuccess";
 
 // layouts
 import ReceiverLayout from "./layouts/receiver/ReceiverLayout";
@@ -33,7 +33,7 @@ function App() {
             <Route path="/dashboard/receiver" element={<ReceiverLayout />}>
               <Route index element={<ReceiverDashboard />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="chat/:userId" element={<Chat />} />  
+              <Route path="chat/:userId" element={<Chat />} />
             </Route>
           </Route>
 
@@ -42,7 +42,7 @@ function App() {
             <Route path="/dashboard/donor" element={<DonorLayout />}>
               <Route index element={<DonorDashboard />} />
               <Route path="profile" element={<Profile />} />
-              <Route path="chat/:userId" element={<Chat />} />  
+              <Route path="chat/:userId" element={<Chat />} />
             </Route>
           </Route>
 
@@ -53,6 +53,9 @@ function App() {
               <Route path="profile" element={<Profile />} />
             </Route>
           </Route>
+
+          {/* Payment success - outside all protected routes */}
+          <Route path="/payment/success" element={<PaymentSuccess />} />
 
           <Route path="*" element={<div className="p-8">404 - Not Found</div>} />
         </Routes>
