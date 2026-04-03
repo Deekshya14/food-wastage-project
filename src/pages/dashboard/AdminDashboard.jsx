@@ -4,7 +4,7 @@ import {
   FaTrash, FaChartBar, FaShieldAlt, FaFileDownload, 
   FaHistory, FaSignOutAlt, FaMedal, FaEnvelopeOpenText, 
   FaUserShield, FaExclamationTriangle, FaStar, FaDownload, 
-  FaSync, FaUserSlash, FaUserCheck, FaMapMarkerAlt, FaWeightHanging, FaFlag
+  FaSync, FaUserSlash, FaUserCheck, FaMapMarkerAlt, FaWeightHanging, FaFlag, FaTag
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
@@ -27,6 +27,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({ users: 0, food: 0, rescued: 0, totalWeight: 0 });
   const [searchTerm, setSearchTerm] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [payments, setPayments] = useState([]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -107,29 +108,33 @@ export default function AdminDashboard() {
     setIsSyncing(true);
     
     try {
-      const [pendingRes, usersRes, foodRes, complaintsRes] = await Promise.all([
-        fetch(`${API}/api/users/pending-donors`, { headers }),
-        fetch(`${API}/api/users/all`, { headers }),
-        fetch(`${API}/api/food/all`, { headers }),
-        fetch(`${API}/api/reports/complaints`, { headers }) // New endpoint
-      ]);
-      
-      const pending = pendingRes.ok ? await pendingRes.json() : [];
-      const users = usersRes.ok ? await usersRes.json() : [];
-      const food = foodRes.ok ? await foodRes.json() : [];
-      const comps = complaintsRes.ok ? await complaintsRes.json() : [];
+      const [pendingRes, usersRes, foodRes, complaintsRes, paymentsRes] = await Promise.all([
+  fetch(`${API}/api/users/pending-donors`, { headers }),
+  fetch(`${API}/api/users/all`, { headers }),
+  fetch(`${API}/api/food/all`, { headers }),
+  fetch(`${API}/api/reports/complaints`, { headers }),
+  fetch(`${API}/api/requests/payments`, { headers })  // 👈 new
+]);
 
-      setPendingDonors(Array.isArray(pending) ? pending : []);
-      setAllUsers(Array.isArray(users) ? users : []);
-      setAllListings(Array.isArray(food) ? food : []);
-      setComplaints(Array.isArray(comps) ? comps : []);
-      
-      setStats({
-        users: Array.isArray(users) ? users.length : 0,
-        food: Array.isArray(food) ? food.length : 0,
-        rescued: Array.isArray(food) ? food.filter(f => f.status === 'completed').length : 0,
-        totalWeight: food.reduce((acc, curr) => acc + (parseFloat(curr.weight) || 0), 0).toFixed(1)
-      });
+const pending = pendingRes.ok ? await pendingRes.json() : [];
+const users = usersRes.ok ? await usersRes.json() : [];
+const food = foodRes.ok ? await foodRes.json() : [];
+const comps = complaintsRes.ok ? await complaintsRes.json() : [];
+const pays = paymentsRes.ok ? await paymentsRes.json() : [];  // 👈 new
+
+setPendingDonors(Array.isArray(pending) ? pending : []);
+setAllUsers(Array.isArray(users) ? users : []);
+setAllListings(Array.isArray(food) ? food : []);
+setComplaints(Array.isArray(comps) ? comps : []);
+setPayments(Array.isArray(pays) ? pays : []);  // 👈 new
+
+setStats({
+  users: Array.isArray(users) ? users.length : 0,
+  food: Array.isArray(food) ? food.length : 0,
+  rescued: Array.isArray(food) ? food.filter(f => f.status === 'completed').length : 0,
+  totalWeight: food.reduce((acc, curr) => acc + (parseFloat(curr.weight) || 0), 0).toFixed(1),
+  totalRevenue: pays.reduce((acc, p) => acc + (p.foodId?.price || 0), 0)  // 👈 new
+});
     } catch (err) { 
       toast.error("Database sync failed");
     } finally {
@@ -192,6 +197,7 @@ export default function AdminDashboard() {
             { id: "users", label: "Members", icon: <FaUsers /> },
             { id: "listings", label: "Inventory", icon: <FaUtensils /> },
             { id: "feedback", label: "Reports", icon: <FaExclamationTriangle />, count: complaints.length },
+{ id: "payments", label: "Payments", icon: <FaTag />, count: payments.length },
           ].map(item => (
             <button
               key={item.id}
@@ -397,6 +403,97 @@ export default function AdminDashboard() {
               {complaints.length === 0 && <EmptyState text="Zero system complaints reported." />}
             </div>
           )}
+
+          {/* PAYMENTS TAB */}
+{activeTab === "payments" && (
+  <div className="space-y-6">
+    {/* Summary Cards */}
+    <div className="grid grid-cols-3 gap-6 mb-6">
+      <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100 text-center">
+        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Total Transactions</p>
+        <p className="text-3xl font-black text-emerald-700 mt-1">{payments.length}</p>
+      </div>
+      <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100 text-center">
+        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Total Revenue</p>
+        <p className="text-3xl font-black text-blue-700 mt-1">
+          Rs. {payments.reduce((acc, p) => acc + (p.foodId?.price || 0), 0)}
+        </p>
+      </div>
+      <div className="bg-purple-50 p-6 rounded-[2rem] border border-purple-100 text-center">
+        <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Avg. Per Order</p>
+        <p className="text-3xl font-black text-purple-700 mt-1">
+          Rs. {payments.length > 0 
+            ? (payments.reduce((acc, p) => acc + (p.foodId?.price || 0), 0) / payments.length).toFixed(0) 
+            : 0}
+        </p>
+      </div>
+    </div>
+
+    {/* Payments Table */}
+    <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
+      <table className="w-full text-left">
+        <thead className="bg-slate-50 text-[10px] uppercase font-black text-slate-400">
+          <tr>
+            <th className="p-6">Food Item</th>
+            <th className="p-6">Receiver</th>
+            <th className="p-6">Amount</th>
+            <th className="p-6">PIDX</th>
+            <th className="p-6">Status</th>
+            <th className="p-6">Date</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {payments.length === 0 ? (
+            <tr>
+              <td colSpan="6" className="p-10 text-center text-slate-400 text-xs font-bold italic">
+                No payments recorded yet.
+              </td>
+            </tr>
+          ) : (
+            payments.map((p) => (
+              <tr key={p._id} className="hover:bg-slate-50 transition-colors">
+                <td className="p-6">
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={`${API}/uploads/${p.foodId?.image}`} 
+                      className="w-10 h-10 rounded-xl object-cover" 
+                    />
+                    <p className="font-black text-slate-700 text-xs">{p.foodId?.title || "N/A"}</p>
+                  </div>
+                </td>
+                <td className="p-6">
+                  <p className="font-bold text-slate-700 text-xs">{p.receiverId?.fullName}</p>
+                  <p className="text-[10px] text-slate-400">{p.receiverId?.email}</p>
+                </td>
+                <td className="p-6">
+                  <span className="font-black text-emerald-600 text-sm">
+                    Rs. {p.foodId?.price || 0}
+                  </span>
+                </td>
+                <td className="p-6">
+                  <span className="font-mono text-[9px] text-slate-400 truncate max-w-[100px] block">
+                    {p.pidx || "—"}
+                  </span>
+                </td>
+                <td className="p-6">
+                  <span className="bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1 rounded-full uppercase">
+                    ✓ Paid
+                  </span>
+                </td>
+                <td className="p-6">
+                  <p className="text-[10px] font-bold text-slate-400">
+                    {new Date(p.updatedAt).toLocaleDateString()}
+                  </p>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
 
           {/* APPROVALS (Preserved) */}
           {activeTab === "approvals" && (

@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FaBell, FaClipboardList, FaBoxOpen, FaComments, FaSearch, FaMapMarkerAlt,
-  FaWeightHanging, FaTag, FaExclamationTriangle, FaLeaf, FaCheckCircle,
-  FaUtensils, FaClock, FaTimesCircle, FaFilter, FaStar, FaUserCircle, FaGlobeAmericas, FaCloudSun, FaHeartbeat
+  FaWeightHanging, FaTag,  FaLeaf, FaCheckCircle,
+  FaUtensils, FaClock, FaTimesCircle,  FaStar,  FaGlobeAmericas, FaCloudSun, FaHeartbeat
 } from "react-icons/fa";
 import { io } from "socket.io-client";
 import ProfileCard from "../../components/ProfileCard";
@@ -11,11 +11,12 @@ import ChatLayout from "../../components/chat/ChatLayout";
 import { useUser } from "../../context/UserContext";
 import ReceiverFoodMap from "../../components/ReceiverFoodMap";
 import { toast } from "react-hot-toast";
+import { formatDistanceToNow } from 'date-fns';
 
 const API = "http://localhost:5000";
 
 export default function ReceiverDashboard() {
-  const { user, token, logout } = useUser();
+  const { user, token } = useUser();
 
   // --- STATE MANAGEMENT ---
   const [foods, setFoods] = useState([]);
@@ -25,7 +26,7 @@ export default function ReceiverDashboard() {
   const [chatPartnerId, setChatPartnerId] = useState(null);
   const [activeTab, setActiveTab] = useState("activity");
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showRateModal, setShowRateModal] = useState(false);
+  const [ setShowRateModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -37,6 +38,25 @@ export default function ReceiverDashboard() {
 
   const notificationRef = useRef();
 
+  useEffect(() => {
+  const handleClickOutside = (event) => {
+    if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+      if (!event.target.closest("#notif-bell-receiver")) {
+        setShowNotifications(false);
+      }
+    }
+  };
+  if (showNotifications) {
+    document.addEventListener("mousedown", handleClickOutside);
+  }
+  return () => document.removeEventListener("mousedown", handleClickOutside);
+}, [showNotifications]); 
+
+  const playNotifSound = () => {
+  const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+  audio.play().catch(err => console.log("Sound blocked:", err));
+};
+
   // --- IMPACT CALCULATIONS ---
   const impactStats = useMemo(() => {
     const completedReqs = requests.filter(r => r.status === 'completed');
@@ -46,19 +66,7 @@ export default function ReceiverDashboard() {
     return { totalWeight, co2Saved, mealsRescued };
   }, [requests]);
 
-  // --- LOGIC FUNCTIONS (PRESERVED) ---
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
-    const R = 6371;
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return (R * c).toFixed(1);
-  };
-
+  
   const getMyLocationAndFetch = (dist = maxDistance) => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -161,44 +169,73 @@ export default function ReceiverDashboard() {
   }
 };
 
-  const verifyPayment = async (payload, foodId) => {
-    if (payload.token === "test_token") { requestFood(foodId); return; }
-    try {
-      const res = await fetch(`${API}/api/payment/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...payload, foodId })
-      });
-      if (res.ok) requestFood(foodId);
-    } catch (err) { console.error("Verification failed", err); }
-  };
 
   useEffect(() => {
-    fetchData();
-    const socket = io(API);
-    if (user?._id) {
-      socket.emit("joinRoom", user._id);
-      socket.on("newNotification", (n) => {
-        setNotifications((prev) => [n, ...prev]);
-        toast(n.message, { icon: '🔔' });
-      });
-      socket.on("requestStatusUpdate", () => { fetchData(); });
-    }
-    return () => socket.disconnect();
-  }, [token, user?._id]);
+  if (!token) return;
+  fetchData();
+
+  const socket = io(API);
+
+  if (user?._id) {
+    socket.emit("joinRoom", user._id);
+
+    socket.on("newNotification", (n) => {
+      playNotifSound();
+      // Add to notification list with timestamp
+      setNotifications((prev) => [{
+        _id: n._id || Date.now(),
+        message: n.message,
+        type: n.type || "general",
+        isRead: false,
+        createdAt: new Date(),
+      }, ...prev]);
+      toast(n.message, { icon: '🔔' });
+    });
+
+    socket.on("receiveMessage", (msg) => {
+  // Only play sound if chat is closed or it's from someone else
+  if (!showChat || msg.sender !== chatPartnerId) {
+    const msgAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/1862/1862-preview.mp3');
+    msgAudio.play().catch(err => console.log("Sound blocked:", err));
+    toast(`💬 New message`, { 
+      duration: 3000,
+      style: { borderRadius: '15px', background: '#333', color: '#fff', fontSize: '12px' }
+    });
+  }
+});
+
+    socket.on("requestStatusUpdate", () => { fetchData(); });
+  }
+
+  return () => socket.disconnect();
+}, [token, user?._id]);
 
   const requestFood = async (foodId) => {
-    try {
-      const res = await fetch(`${API}/api/requests/${foodId}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      });
-      if(res.ok) {
-        toast.success("Request sent successfully!");
-        fetchData();
-      }
-    } catch (error) { toast.error("Failed to request food."); }
-  };
+  try {
+    const res = await fetch(`${API}/api/requests/${foodId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+
+    if (res.ok) {
+      toast.success("Request sent successfully!");
+      // Immediately update local state so button disables instantly
+      const newReq = { 
+        _id: Date.now(), 
+        foodId: { _id: foodId }, 
+        status: "pending" 
+      };
+      setRequests(prev => [...prev, newReq]);
+      // Then fetch real data from server
+      fetchData();
+    } else {
+      const err = await res.json();
+      toast.error(err.message || "Failed to request food.");
+    }
+  } catch (error) { 
+    toast.error("Failed to request food."); 
+  }
+};
 
   const handleSubmitReview = async () => {
     if (!selectedRequest) return;
@@ -217,6 +254,27 @@ export default function ReceiverDashboard() {
       }
     } catch (error) { alert("Error connecting to server."); }
   };
+
+  const markAllAsRead = async () => {
+  try {
+    const res = await fetch(`${API}/api/notifications/read-all`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      toast.success("All caught up!");
+    }
+  } catch (err) {
+    console.error("Failed to mark read:", err);
+  }
+};
+
+const clearAllNotifications = () => {
+  setNotifications([]);
+  setShowNotifications(false);
+  toast.dismiss();
+};
 
   const filteredFoods = useMemo(() => {
     return foods.filter((f) => {
@@ -260,27 +318,7 @@ export default function ReceiverDashboard() {
   return (
     <div className="min-h-screen bg-[#F4F7FE] flex font-sans text-slate-900 relative selection:bg-blue-100">
       
-      {/* RATING MODAL */}
-      <AnimatePresence>
-        {showRateModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl text-center">
-              <div className="text-5xl mb-4">🌟</div>
-              <h3 className="text-2xl font-black text-slate-800">Rate Experience</h3>
-              <div className="flex justify-center gap-3 py-8">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button key={star} onClick={() => setRating(star)} className={`text-4xl transition-transform hover:scale-125 ${rating >= star ? 'text-amber-400' : 'text-gray-200'}`}><FaStar /></button>
-                ))}
-              </div>
-              <textarea className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none min-h-[100px] text-sm mb-6" placeholder="Feedback..." value={comment} onChange={(e) => setComment(e.target.value)} />
-              <div className="flex gap-3">
-                <button onClick={() => setShowRateModal(false)} className="flex-1 py-4 text-slate-400 font-bold uppercase text-[10px]">Cancel</button>
-                <button onClick={handleSubmitReview} className="flex-2 bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg">Submit</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      
 
       {/* --- SIDEBAR --- */}
       <aside className="w-80 bg-white border-r border-slate-200/60 p-6 flex flex-col gap-8 sticky top-0 h-screen z-40">
@@ -325,24 +363,59 @@ export default function ReceiverDashboard() {
           </div>
 
           <div className="relative" ref={notificationRef}>
-            <button onClick={() => setShowNotifications(!showNotifications)} className="p-4 bg-white border border-slate-200 rounded-[1.2rem] hover:shadow-xl transition-all relative group">
+            <button id="notif-bell-receiver" onClick={() => setShowNotifications(!showNotifications)} className="p-4 bg-white border border-slate-200 rounded-[1.2rem] hover:shadow-xl transition-all relative group">
               <FaBell className="text-slate-600 group-hover:rotate-12 transition-transform" />
-              {notifications.length > 0 && <span className="absolute top-3 right-3 w-3 h-3 bg-red-500 border-4 border-white rounded-full"></span>}
+              {notifications.filter(n => !n.isRead).length > 0 && (
+  <span className="absolute top-3 right-3 flex h-3 w-3">
+    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+    <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-white"></span>
+  </span>
+)}
             </button>
             <AnimatePresence>
-              {showNotifications && (
-                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 15 }} className="absolute right-0 mt-4 w-96 bg-white border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-[2rem] z-50 overflow-hidden">
-                  <div className="p-6 border-b bg-slate-50/50 font-black text-[10px] uppercase text-slate-400 tracking-widest">Recent Notifications</div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.length === 0 ? <p className="p-10 text-center text-sm text-slate-400 italic font-medium">Clear for now!</p> : notifications.map((n) => (
-                      <div key={n._id} className="p-5 border-b border-slate-50 hover:bg-blue-50/30 text-[11px] font-bold text-slate-600 flex gap-3 items-start leading-relaxed">
-                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1 flex-shrink-0"></div> {n.message}
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+  {showNotifications && (
+    <motion.div
+      ref={notificationRef}
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 15 }}
+      className="absolute right-0 mt-4 w-96 bg-white border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-[2rem] z-50 overflow-hidden p-4"
+    >
+      <div className="flex justify-between items-center px-2 mb-4">
+        <h3 className="font-black text-slate-800">Notifications</h3>
+        <button onClick={markAllAsRead} className="text-[10px] font-bold text-blue-500 hover:text-blue-700 uppercase tracking-tighter">
+          Mark all read
+        </button>
+      </div>
+      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+        {notifications.length === 0 ? (
+          <div className="py-10 text-center">
+            <p className="text-gray-400 text-xs italic">No new alerts</p>
+          </div>
+        ) : (
+          notifications.map((n) => (
+            <div key={n._id} className={`p-3 rounded-2xl border-l-4 transition-all duration-300 ${n.isRead ? 'bg-slate-50 border-transparent text-slate-500' : 'bg-blue-50 border-blue-500 shadow-sm text-slate-900'}`}>
+              <div className="flex gap-3">
+                <div className={`p-2 rounded-lg h-fit ${n.isRead ? 'bg-gray-200 text-gray-400' : 'bg-blue-100 text-blue-600'}`}>
+                  <FaBell size={12} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[11px] leading-snug font-bold">{n.message}</p>
+                  <span className="text-[9px] text-gray-400 font-medium mt-1 block">
+                    {n.createdAt ? formatDistanceToNow(new Date(n.createdAt)) + " ago" : "Just now"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      <button onClick={clearAllNotifications} className="w-full mt-4 py-2 text-[10px] font-black uppercase text-rose-500 hover:bg-rose-50 rounded-xl transition-all active:scale-95">
+        Clear List
+      </button>
+    </motion.div>
+  )}
+</AnimatePresence>
           </div>
         </header>
 
@@ -459,10 +532,16 @@ export default function ReceiverDashboard() {
                           </div>
                           <div className="flex flex-col gap-2">
                             {status === 'approved' && r.foodId?.price > 0 && (
-                              <button onClick={() => handlePayment(r.foodId)} className="w-full py-3 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-700 transition-all">
-                                <FaTag /> Pay Rs. {r.foodId.price}
-                              </button>
-                            )}
+  r.isPaid ? (
+    <div className="w-full py-3 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 border border-emerald-100">
+      <FaCheckCircle /> Payment Confirmed ✓
+    </div>
+  ) : (
+    <button onClick={() => handlePayment(r.foodId)} className="w-full py-3 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-700 transition-all">
+      <FaTag /> Pay Rs. {r.foodId.price}
+    </button>
+  )
+)}
                             <button onClick={() => { setChatPartnerId(r.foodId?.donorId?._id || r.foodId?.donorId); setShowChat(true); }} className="w-full py-3 bg-slate-100 text-slate-600 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all">
                               <FaComments size={12} /> Contact
                             </button>
@@ -545,7 +624,10 @@ export default function ReceiverDashboard() {
             ) : (
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-8">
                 {filteredFoods.length > 0 ? filteredFoods.map(f => {
-                  const myReq = requests.find(r => r.foodId?._id === f._id);
+                  const myReq = requests.find(r => 
+  r.foodId?._id?.toString() === f._id?.toString() || 
+  r.foodId === f._id
+);
                   return (
                     <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} key={f._id} className="bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm flex flex-col hover:shadow-xl transition-all group">
                       <div className="h-56 overflow-hidden relative">
@@ -561,14 +643,26 @@ export default function ReceiverDashboard() {
                       <div className="p-6 flex flex-col flex-1">
                         <div className="flex-1">
                           <h3 className="font-black text-lg text-slate-800 leading-tight uppercase tracking-tight mb-2">{f.title}</h3>
-                          <p className="text-[11px] text-slate-400 font-medium mb-4 line-clamp-2">{f.description || "No specific details provided."}</p>
+<p className="text-[10px] font-black text-blue-500 mb-1 flex items-center gap-1">
+  <FaUtensils size={9} className="text-blue-300" /> 
+  By: {f.donorId?.fullName || f.donorId?.name || "Anonymous Donor"}
+</p>
+<p className="text-[11px] text-slate-400 font-medium mb-4 line-clamp-2">{f.description || "No specific details provided."}</p>
                           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4"><FoodMeta food={f} /></div>
                         </div>
 
                         <div className="flex gap-2">
-                          <button disabled={!!myReq} onClick={() => requestFood(f._id)} className={`flex-1 py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${myReq ? "bg-slate-100 text-slate-300" : "bg-blue-600 text-white hover:bg-slate-900"}`}>
-                            {myReq ? "Requested" : "Claim Food"}
-                          </button>
+                          <button 
+  disabled={!!myReq} 
+  onClick={() => requestFood(f._id)} 
+  className={`flex-1 py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+    myReq 
+      ? "bg-emerald-50 text-emerald-500 border border-emerald-100 cursor-not-allowed" 
+      : "bg-blue-600 text-white hover:bg-slate-900"
+  }`}
+>
+  {myReq ? <><FaCheckCircle size={10}/> Claimed</> : "Claim Food"}
+</button>
                           <button onClick={() => { setChatPartnerId(f.donorId?._id || f.donorId); setShowChat(true); }} className="p-4 bg-slate-900 text-white rounded-xl hover:bg-blue-600 transition-all"><FaComments size={16} /></button>
                         </div>
                       </div>

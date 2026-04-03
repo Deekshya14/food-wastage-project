@@ -823,13 +823,29 @@ useEffect(() => {
                         )}
 
                         {statusType === 'approved' && (
-                          <button 
-                            onClick={() => updateRequestStatus(req._id, "completed")} 
-                            className="w-full py-4 bg-slate-900 text-white text-[10px] font-black uppercase rounded-2xl flex items-center justify-center gap-2 hover:bg-black transition-all shadow-xl shadow-slate-100"
-                          >
-                            <FaHandshake size={14}/> Confirm Handover
-                          </button>
-                        )}
+  <>
+    {/* Payment Status Badge */}
+    {req.foodId?.price > 0 && (
+      req.isPaid ? (
+        <div className="w-full py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[9px] font-black uppercase flex items-center justify-center gap-2 border border-emerald-100">
+          <FaCheckCircle size={10}/> Payment Received ✓
+        </div>
+      ) : (
+        <div className="w-full py-2 bg-amber-50 text-amber-500 rounded-xl text-[9px] font-black uppercase flex items-center justify-center gap-2 border border-amber-100">
+          <FaClock size={10}/> Awaiting Payment...
+        </div>
+      )
+    )}
+
+    {/* Confirm Handover Button */}
+    <button 
+      onClick={() => updateRequestStatus(req._id, "completed")} 
+      className="w-full py-4 bg-slate-900 text-white text-[10px] font-black uppercase rounded-2xl flex items-center justify-center gap-2 hover:bg-black transition-all shadow-xl shadow-slate-100"
+    >
+      <FaHandshake size={14}/> Confirm Handover
+    </button>
+  </>
+)}
 
                         <button 
                           onClick={() => { setChatPartnerId(req.receiverId?._id); setShowChat(true); }} 

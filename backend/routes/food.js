@@ -76,8 +76,8 @@ router.get("/", authMiddleware, async (req, res) => {
     }
 
     // Use try/catch specifically for the find to see if index is missing
-    let query = Food.find(filter);
-
+    let query = Food.find(filter).populate("donorId", "fullName email");
+    
 // 💡 If we ARE NOT searching by location, sort by newest first
 if (!lat || !lng) {
   query = query.sort({ createdAt: -1 });

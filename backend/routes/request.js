@@ -1,7 +1,8 @@
 import express from "express";
 import Request from "../models/Request.js";
 import Food from "../models/Food.js";
-import { authMiddleware } from "../middleware/authMiddleware.js";
+
+import { authMiddleware, adminMiddleware } from "../middleware/authMiddleware.js";
 import Notification from "../models/Notification.js";
 
 const router = express.Router();
@@ -156,6 +157,20 @@ router.post("/:id/rate", authMiddleware, async (req, res) => {
     res.json({ success: true, message: "Feedback saved!" });
   } catch (err) {
     res.status(500).json({ message: "Rating failed" });
+  }
+});
+
+
+// Admin: Get all paid transactions
+router.get("/payments", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const paidRequests = await Request.find({ isPaid: true })
+      .populate("foodId", "title price image")
+      .populate("receiverId", "fullName email")
+      .sort({ updatedAt: -1 });
+    res.json(paidRequests);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch payments" });
   }
 });
 

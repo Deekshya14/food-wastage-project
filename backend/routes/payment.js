@@ -1,7 +1,9 @@
 import express from "express";
+import Request from "../models/Request.js";
 
 const router = express.Router();
 
+// Route 1: Initiate Payment
 router.post("/initiate", async (req, res) => {
   const { foodId, amount, foodTitle } = req.body;
 
@@ -13,7 +15,7 @@ router.post("/initiate", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        return_url: "http://localhost:5173/payment/success",
+        return_url: "http://localhost:5000/api/payment/callback",
         website_url: "http://localhost:5173",
         amount: amount * 100,
         purchase_order_id: foodId,
@@ -29,6 +31,24 @@ router.post("/initiate", async (req, res) => {
     console.error("Khalti Error:", err);
     res.status(500).json({ error: "Payment initiation failed" });
   }
+});
+
+// Route 2: Khalti Callback (called by Khalti after payment)
+router.get("/callback", async (req, res) => {
+  const { pidx, status, purchase_order_id } = req.query;
+
+  if (status === "Completed") {
+    try {
+      await Request.findOneAndUpdate(
+        { foodId: purchase_order_id },
+        { isPaid: true, paymentStatus: "paid", pidx: pidx }
+      );
+    } catch (err) {
+      console.error("Callback DB update failed:", err);
+    }
+  }
+
+  res.redirect(`http://localhost:5173/payment/success?status=${status}&pidx=${pidx}&purchase_order_id=${purchase_order_id}`);
 });
 
 export default router;
