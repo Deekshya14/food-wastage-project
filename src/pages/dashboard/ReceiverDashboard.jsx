@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FaBell, FaClipboardList, FaBoxOpen, FaComments, FaSearch, FaMapMarkerAlt,
   FaWeightHanging, FaTag,  FaLeaf, FaCheckCircle,
-  FaUtensils, FaClock, FaTimesCircle,  FaStar,  FaGlobeAmericas, FaCloudSun, FaHeartbeat
+  FaUtensils, FaClock, FaTimesCircle, FaExclamationTriangle, FaStar,  FaGlobeAmericas, FaCloudSun, FaHeartbeat
 } from "react-icons/fa";
 import { io } from "socket.io-client";
 import ProfileCard from "../../components/ProfileCard";
@@ -26,7 +26,7 @@ export default function ReceiverDashboard() {
   const [chatPartnerId, setChatPartnerId] = useState(null);
   const [activeTab, setActiveTab] = useState("activity");
   const [showNotifications, setShowNotifications] = useState(false);
-  const [ setShowRateModal] = useState(false);
+  const [showRateModal, setShowRateModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -35,6 +35,11 @@ export default function ReceiverDashboard() {
   const [maxDistance, setMaxDistance] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+
+  const [showComplaintModal, setShowComplaintModal] = useState(false);
+const [complaintReason, setComplaintReason] = useState("");
+const [complaintDescription, setComplaintDescription] = useState("");
+const [complaintTarget, setComplaintTarget] = useState(null); // the request
 
   const notificationRef = useRef();
 
@@ -170,42 +175,66 @@ export default function ReceiverDashboard() {
 };
 
 
-  useEffect(() => {
-  if (!token) return;
+ // REPLACE WITH THIS:
+useEffect(() => {
+  if (!token || !user?._id) return;
   fetchData();
 
-  const socket = io(API);
+  const socket = io(API, {
+    reconnection: true,          
+    reconnectionAttempts: 5,     
+  });
 
-  if (user?._id) {
+  // Join room on connect AND on every reconnect
+  const joinRooms = () => {
     socket.emit("joinRoom", user._id);
+    socket.emit("joinRoom", user._id.toString());
+    console.log("✅ Receiver joined room:", user._id);
+  };
 
-    socket.on("newNotification", (n) => {
-      playNotifSound();
-      // Add to notification list with timestamp
-      setNotifications((prev) => [{
-        _id: n._id || Date.now(),
-        message: n.message,
-        type: n.type || "general",
-        isRead: false,
-        createdAt: new Date(),
-      }, ...prev]);
-      toast(n.message, { icon: '🔔' });
-    });
+  socket.on("connect", joinRooms);
+  if (socket.connected) joinRooms();
 
-    socket.on("receiveMessage", (msg) => {
-  // Only play sound if chat is closed or it's from someone else
-  if (!showChat || msg.sender !== chatPartnerId) {
-    const msgAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/1862/1862-preview.mp3');
-    msgAudio.play().catch(err => console.log("Sound blocked:", err));
-    toast(`💬 New message`, { 
-      duration: 3000,
-      style: { borderRadius: '15px', background: '#333', color: '#fff', fontSize: '12px' }
-    });
-  }
+  socket.on("newNotification", (n) => {
+    playNotifSound();
+    setNotifications((prev) => [{
+      _id: n._id || Date.now(),
+      message: n.message,
+      type: n.type || "general",
+      isRead: false,
+      createdAt: new Date(),
+    }, ...prev]);
+    toast(n.message, { icon: '🔔' });
+    // Refresh data on every notification too
+    fetchData();
+  });
+
+  socket.on("receiveMessage", (msg) => {
+    if (!showChat || msg.sender !== chatPartnerId) {
+      const msgAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/1862/1862-preview.mp3');
+      msgAudio.play().catch(err => console.log("Sound blocked:", err));
+      toast(`💬 New message`, { 
+        duration: 3000,
+        style: { borderRadius: '15px', background: '#333', color: '#fff', fontSize: '12px' }
+      });
+    }
+  });
+
+  // Fires when donor approves, rejects, OR confirms handover
+  socket.on("requestStatusUpdate", () => {
+  console.log("🔄 Status update received — refreshing");
+  // Force a fresh fetch by calling the API directly
+  const headers = { Authorization: `Bearer ${token}` };
+  Promise.all([
+    fetch(`${API}/api/requests`, { headers }),
+    fetch(`${API}/api/notifications`, { headers })
+  ]).then(async ([reqRes, notifRes]) => {
+    const reqData = await reqRes.json();
+    const notifData = await notifRes.json();
+    if (Array.isArray(reqData)) setRequests(reqData.filter(r => r.foodId));
+    if (Array.isArray(notifData)) setNotifications(notifData);
+  });
 });
-
-    socket.on("requestStatusUpdate", () => { fetchData(); });
-  }
 
   return () => socket.disconnect();
 }, [token, user?._id]);
@@ -267,6 +296,55 @@ export default function ReceiverDashboard() {
     }
   } catch (err) {
     console.error("Failed to mark read:", err);
+  }
+};
+
+const handleSubmitComplaint = async () => {
+  if (!complaintReason.trim()) return toast.error("Please select a reason.");
+  
+  // Extract donorId safely — handle both object and string cases
+  const donorId = complaintTarget?.foodId?.donorId?._id 
+    || complaintTarget?.foodId?.donorId 
+    || null;
+
+  const foodId = complaintTarget?.foodId?._id 
+    || complaintTarget?.foodId 
+    || null;
+
+  console.log("Complaint target:", complaintTarget);
+  console.log("Extracted donorId:", donorId);
+  console.log("Extracted foodId:", foodId);
+
+  try {
+    const res = await fetch(`${API}/api/reports/complaints`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json", 
+        Authorization: `Bearer ${token}` 
+      },
+      body: JSON.stringify({
+        reason: complaintReason,
+        description: complaintDescription || "No description provided",
+        reportedUserId: donorId,
+        foodId: foodId,
+      }),
+    });
+
+    const responseData = await res.json();
+    console.log("Server response:", responseData);
+
+    if (res.ok) {
+      toast.success("Complaint submitted successfully!");
+      setShowComplaintModal(false);
+      setComplaintReason("");
+      setComplaintDescription("");
+      setComplaintTarget(null);
+    } else {
+      toast.error(responseData.message || "Failed to submit complaint.");
+    }
+  } catch (err) { 
+    console.error("Complaint error:", err);
+    toast.error("Server error."); 
   }
 };
 
@@ -576,6 +654,7 @@ const clearAllNotifications = () => {
                         <button onClick={() => { setSelectedRequest(req); setShowRateModal(true); }} className="w-full py-3 bg-amber-50 text-amber-600 text-[9px] font-black uppercase rounded-xl hover:bg-amber-400 hover:text-white transition-all flex items-center justify-center gap-2 border border-amber-100">
                           <FaStar /> Rate Donor
                         </button>
+                        
                       ) : (
                         <div className="bg-slate-50/50 p-3 rounded-xl flex flex-col items-center gap-1">
                           <div className="flex gap-0.5 text-amber-400">
@@ -584,6 +663,12 @@ const clearAllNotifications = () => {
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.1em]">Feedback Submitted</p>
                         </div>
                       )}
+                      <button
+    onClick={() => { setComplaintTarget(req); setShowComplaintModal(true); }}
+    className="w-full py-2 bg-rose-50 text-rose-400 text-[8px] font-black uppercase rounded-xl hover:bg-rose-100 transition-all flex items-center justify-center gap-2 border border-rose-100 mt-2"
+  >
+    <FaExclamationTriangle size={9} /> Report Issue
+  </button>
                     </div>
                   ))
                 )}
@@ -674,6 +759,108 @@ const clearAllNotifications = () => {
           </div>
         )}
       </main>
+
+{/* COMPLAINT MODAL */}
+{showComplaintModal && complaintTarget && (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl">
+      <h3 className="text-xl font-black text-slate-800 mb-2">Report an Issue</h3>
+      <p className="text-[11px] text-slate-400 font-medium mb-6">
+        About: <span className="font-black text-slate-600">{complaintTarget?.foodId?.title}</span>
+      </p>
+
+      {/* REASON SELECT */}
+      <div className="mb-4">
+        <label className="text-[10px] font-black text-slate-400 uppercase block mb-2">Reason</label>
+        <select
+          value={complaintReason}
+          onChange={(e) => setComplaintReason(e.target.value)}
+          className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-bold text-slate-700"
+        >
+          <option value="">Select a reason...</option>
+          <option value="Food quality issue">Food quality issue</option>
+          <option value="Donor did not show up">Donor did not show up</option>
+          <option value="Wrong food description">Wrong food description</option>
+          <option value="Inappropriate behavior">Inappropriate behavior</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      {/* DESCRIPTION */}
+      <textarea
+        placeholder="Describe the issue (optional)..."
+        value={complaintDescription}
+        onChange={(e) => setComplaintDescription(e.target.value)}
+        className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-medium min-h-[100px] mb-6 resize-none"
+      />
+
+      <div className="flex gap-3">
+        <button
+          onClick={handleSubmitComplaint}
+          className="flex-1 bg-rose-500 text-white py-4 rounded-2xl font-black text-xs uppercase hover:bg-rose-600 transition-all"
+        >
+          Submit Report
+        </button>
+        <button
+          onClick={() => { setShowComplaintModal(false); setComplaintReason(""); setComplaintDescription(""); }}
+          className="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-black text-xs uppercase"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* RATE MODAL */}
+{showRateModal && selectedRequest && (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl">
+      <h3 className="text-xl font-black text-slate-800 mb-2">Rate Your Donor</h3>
+      <p className="text-[11px] text-slate-400 font-medium mb-6">
+        How was your experience with this food rescue?
+      </p>
+
+      {/* STAR SELECTOR */}
+      <div className="flex gap-2 justify-center mb-6">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            onClick={() => setRating(star)}
+            className={`text-3xl transition-transform hover:scale-110 ${
+              star <= rating ? "text-amber-400" : "text-slate-200"
+            }`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+
+      {/* COMMENT BOX */}
+      <textarea
+        placeholder="Leave a comment (optional)..."
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-medium min-h-[100px] mb-6 resize-none"
+      />
+
+      <div className="flex gap-3">
+        <button
+          onClick={handleSubmitReview}
+          className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase hover:bg-black transition-all"
+        >
+          Submit Review
+        </button>
+        <button
+          onClick={() => { setShowRateModal(false); setRating(5); setComment(""); }}
+          className="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-black text-xs uppercase hover:bg-slate-200 transition-all"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {showChat && <ChatLayout partnerId={chatPartnerId} onClose={() => setShowChat(false)} />}
     </div>

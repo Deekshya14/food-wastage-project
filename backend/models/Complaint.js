@@ -6,20 +6,33 @@ const complaintSchema = new mongoose.Schema({
     ref: "User", 
     required: true
   },
+  reportedUserId: {               // ADD THIS
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: false
+  },
+
   foodId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Food",
     required: false 
   },
   reason: {
-    type: String,
-    required: true,
-    enum: ["Expired Food", "Incorrect Weight", "Safety Concern", "Poor Communication", "Other"]
-  },
+  type: String,
+  required: true,
+  enum: [
+    "Food quality issue",
+    "Donor did not show up", 
+    "Wrong food description",
+    "Inappropriate behavior",
+    "Other"
+  ]
+},
   description: {
-    type: String,
-    required: true
-  },
+  type: String,
+  required: false,
+  default: ""
+},
   status: {
     type: String,
     enum: ["pending", "resolved", "dismissed"],

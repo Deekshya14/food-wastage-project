@@ -28,6 +28,7 @@ export default function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [payments, setPayments] = useState([]);
+  const [reviews, setReviews] = useState([]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -108,25 +109,28 @@ export default function AdminDashboard() {
     setIsSyncing(true);
     
     try {
-      const [pendingRes, usersRes, foodRes, complaintsRes, paymentsRes] = await Promise.all([
+      const [pendingRes, usersRes, foodRes, complaintsRes, paymentsRes, reviewsRes] = await Promise.all([
   fetch(`${API}/api/users/pending-donors`, { headers }),
   fetch(`${API}/api/users/all`, { headers }),
   fetch(`${API}/api/food/all`, { headers }),
   fetch(`${API}/api/reports/complaints`, { headers }),
-  fetch(`${API}/api/requests/payments`, { headers })  // 👈 new
+  fetch(`${API}/api/requests/payments`, { headers }),     // ✅ payments = index 4
+  fetch(`${API}/api/requests/all-reviews`, { headers })   // ✅ reviews = index 5
 ]);
 
 const pending = pendingRes.ok ? await pendingRes.json() : [];
 const users = usersRes.ok ? await usersRes.json() : [];
 const food = foodRes.ok ? await foodRes.json() : [];
 const comps = complaintsRes.ok ? await complaintsRes.json() : [];
-const pays = paymentsRes.ok ? await paymentsRes.json() : [];  // 👈 new
+const pays = paymentsRes.ok ? await paymentsRes.json() : [];  
+const revs = reviewsRes.ok ? await reviewsRes.json() : [];
+setReviews(Array.isArray(revs) ? revs : []);
 
 setPendingDonors(Array.isArray(pending) ? pending : []);
 setAllUsers(Array.isArray(users) ? users : []);
 setAllListings(Array.isArray(food) ? food : []);
 setComplaints(Array.isArray(comps) ? comps : []);
-setPayments(Array.isArray(pays) ? pays : []);  // 👈 new
+setPayments(Array.isArray(pays) ? pays : []);  
 
 setStats({
   users: Array.isArray(users) ? users.length : 0,
@@ -180,15 +184,17 @@ setStats({
     <div className="min-h-screen bg-[#F8FAF9] flex font-sans">
       {/* --- SIDEBAR --- */}
       <aside className="w-72 bg-white p-8 flex flex-col sticky top-0 h-screen shadow-sm border-r border-emerald-50">
-        <div className="flex items-center gap-3 px-2 mb-10 group cursor-pointer" onClick={() => setActiveTab("overview")}>
-          <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-6 transition-transform">
-            <FaUtensils className="text-white text-xl" /> 
-          </div>
-          <div>
-            <h1 className="text-xl font-black tracking-tighter leading-none text-slate-800">FoodWise</h1>
-            <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">Administrator</p>
-          </div>
-        </div>
+        <div className="px-2 mb-10 flex items-center gap-3">
+  <div className="w-11 h-11 bg-gradient-to-br from-emerald-400 to-blue-600 rounded-[1.2rem] flex items-center justify-center text-white shadow-lg shadow-blue-100">
+    <FaUtensils size={22} />
+  </div>
+  <div>
+    <h2 className="font-black text-lg tracking-tighter text-slate-800 leading-none">
+      FOODWISE<span className="text-blue-600">CONNECT</span>
+    </h2>
+    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Administrator</p>
+  </div>
+</div>
 
         <nav className="flex-1 space-y-2">
           {[
@@ -196,7 +202,9 @@ setStats({
             { id: "approvals", label: "Pending", icon: <FaUserClock />, count: pendingDonors.length },
             { id: "users", label: "Members", icon: <FaUsers /> },
             { id: "listings", label: "Inventory", icon: <FaUtensils /> },
-            { id: "feedback", label: "Reports", icon: <FaExclamationTriangle />, count: complaints.length },
+            { id: "feedback", label: "Reviews", icon: <FaStar /> },
+            { id: "complaints", label: "Complaints", icon: <FaExclamationTriangle />, count: complaints.length },
+            { id: "reports", label: "Reports", icon: <FaFileDownload /> },
 { id: "payments", label: "Payments", icon: <FaTag />, count: payments.length },
           ].map(item => (
             <button
@@ -304,18 +312,30 @@ setStats({
                   </div>
                 </div>
 
-                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2"><FaFlag className="text-rose-400"/> Recent Complaints</h3>
-                  <div className="space-y-3">
-                    {complaints.slice(-3).map((c, i) => (
-                      <div key={i} className="p-4 bg-rose-50/50 rounded-2xl border border-rose-100">
-                        <p className="text-xs font-bold text-slate-700 mb-1">{c.reason}</p>
-                        <p className="text-[10px] text-slate-400 uppercase font-black">From: {c.userId?.fullName || "User"}</p>
-                      </div>
-                    ))}
-                    {complaints.length === 0 && <p className="text-center text-xs text-slate-400 py-4">No active reports</p>}
-                  </div>
-                </div>
+               
+<div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+    <FaStar className="text-amber-400"/> Recent Reviews
+  </h3>
+  <div className="space-y-3">
+    {reviews.slice(0, 3).map((r, i) => (
+      <div key={i} className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100">
+        <div className="flex gap-0.5 text-amber-400 mb-1">
+          {[...Array(5)].map((_, s) => (
+            <FaStar key={s} size={10} className={s < r.rating ? "text-amber-400" : "text-slate-200"} />
+          ))}
+        </div>
+        <p className="text-xs font-bold text-slate-700">{r.ratingComment || "No comment"}</p>
+        <p className="text-[10px] text-slate-400 uppercase font-black mt-1">
+          {r.foodId?.title} — by {r.receiverId?.fullName}
+        </p>
+      </div>
+    ))}
+    {reviews.length === 0 && (
+      <p className="text-center text-xs text-slate-400 py-4">No reviews yet</p>
+    )}
+  </div>
+</div>
               </div>
             </div>
           )}
@@ -380,29 +400,43 @@ setStats({
 
           {/* COMPLAINTS / REPORTS TAB */}
           {activeTab === "feedback" && (
-            <div className="space-y-6">
-              {complaints.map(c => (
-                <div key={c._id} className="p-8 bg-white border border-rose-100 rounded-[2.5rem] flex flex-col md:flex-row justify-between gap-6">
-                   <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                         <span className="bg-rose-500 text-white text-[9px] font-black px-2 py-1 rounded">HIGH ALERT</span>
-                         <h4 className="font-black text-slate-800 text-xl">{c.reason}</h4>
-                      </div>
-                      <p className="text-slate-500 text-sm leading-relaxed">{c.description || "No additional details provided."}</p>
-                      <div className="flex gap-4 pt-2">
-                         <p className="text-[10px] font-black text-slate-400 uppercase">Reporter: {c.userId?.fullName}</p>
-                         <p className="text-[10px] font-black text-slate-400 uppercase">Date: {new Date(c.createdAt).toLocaleDateString()}</p>
-                      </div>
-                   </div>
-                   <div className="flex items-center gap-2">
-                      <button className="bg-slate-900 text-white px-6 py-4 rounded-2xl text-xs font-black uppercase">Dismiss</button>
-                      <button className="bg-rose-500 text-white px-6 py-4 rounded-2xl text-xs font-black uppercase">Take Action</button>
-                   </div>
-                </div>
-              ))}
-              {complaints.length === 0 && <EmptyState text="Zero system complaints reported." />}
+  <div className="space-y-6">
+    {reviews.length === 0 ? (
+      <EmptyState text="No reviews submitted yet." />
+    ) : (
+      reviews.map((r) => (
+        <div key={r._id} className="p-8 bg-white border border-amber-100 rounded-[2.5rem] flex flex-col md:flex-row justify-between gap-6">
+          <div className="flex gap-5 items-start">
+            <img
+              src={`${API}/uploads/${r.foodId?.image}`}
+              className="w-16 h-16 rounded-2xl object-cover shadow-sm"
+            />
+            <div className="space-y-2">
+              <div className="flex gap-1 text-amber-400">
+                {[...Array(5)].map((_, s) => (
+                  <FaStar key={s} size={14} className={s < r.rating ? "text-amber-400" : "text-slate-200"} />
+                ))}
+              </div>
+              <h4 className="font-black text-slate-800 text-lg">{r.foodId?.title}</h4>
+              <p className="text-slate-500 text-sm">{r.ratingComment || "No comment provided."}</p>
+              <div className="flex gap-4 pt-1">
+                <p className="text-[10px] font-black text-slate-400 uppercase">
+                  Reviewer: {r.receiverId?.fullName}
+                </p>
+                <p className="text-[10px] text-slate-400 uppercase font-black mt-1">
+  {r.foodId?.title} — by {r.receiverId?.fullName}
+</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase">
+                  {new Date(r.updatedAt).toLocaleDateString()}
+                </p>
+              </div>
             </div>
-          )}
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+)}
 
           {/* PAYMENTS TAB */}
 {activeTab === "payments" && (
@@ -467,8 +501,8 @@ setStats({
                 </td>
                 <td className="p-6">
                   <span className="font-black text-emerald-600 text-sm">
-                    Rs. {p.foodId?.price || 0}
-                  </span>
+  Rs. {p.paidAmount || p.foodId?.price || 0}
+</span>
                 </td>
                 <td className="p-6">
                   <span className="font-mono text-[9px] text-slate-400 truncate max-w-[100px] block">
@@ -494,6 +528,177 @@ setStats({
   </div>
 )}
 
+
+{activeTab === "complaints" && (
+  <div className="space-y-6">
+    {complaints.length === 0 ? (
+      <EmptyState text="No complaints submitted yet." />
+    ) : (
+      complaints.map((c) => (
+        <div key={c._id} className="p-8 bg-white border border-rose-100 rounded-[2.5rem] flex flex-col md:flex-row justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="bg-rose-500 text-white text-[9px] font-black px-2 py-1 rounded">REPORT</span>
+              <h4 className="font-black text-slate-800 text-lg">{c.reason}</h4>
+            </div>
+            <p className="text-slate-500 text-sm">{c.description || "No details provided."}</p>
+            <div className="flex gap-4 pt-1">
+              <p className="text-[10px] font-black text-slate-400 uppercase">Reporter: {c.userId?.fullName}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase">Date: {new Date(c.createdAt).toLocaleDateString()}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button className="bg-slate-900 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase hover:bg-slate-700 transition-all">Dismiss</button>
+            <button className="bg-rose-500 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase hover:bg-rose-600 transition-all">Suspend User</button>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+)}
+
+{activeTab === "reports" && (
+  <div className="space-y-8">
+    <div className="grid grid-cols-2 gap-6">
+
+      {/* USER REPORT */}
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+        <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+          <FaUsers className="text-emerald-500" /> User Report
+        </h3>
+        <p className="text-slate-400 text-xs">Total registered users, roles breakdown, verification status.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-emerald-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-emerald-700">{allUsers.filter(u => u.role === 'donor').length}</p>
+            <p className="text-[9px] font-black text-emerald-400 uppercase">Donors</p>
+          </div>
+          <div className="bg-blue-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-blue-700">{allUsers.filter(u => u.role === 'receiver').length}</p>
+            <p className="text-[9px] font-black text-blue-400 uppercase">Receivers</p>
+          </div>
+        </div>
+        <button onClick={exportToCSV} className="w-full py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-emerald-600 transition-all">
+          <FaFileDownload /> Export Users CSV
+        </button>
+      </div>
+
+      {/* FOOD REPORT */}
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+        <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+          <FaUtensils className="text-amber-500" /> Food Report
+        </h3>
+        <p className="text-slate-400 text-xs">Listings created, completed handovers, total weight saved.</p>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-amber-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-amber-700">{allListings.length}</p>
+            <p className="text-[9px] font-black text-amber-400 uppercase">Total</p>
+          </div>
+          <div className="bg-emerald-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-emerald-700">{allListings.filter(f => f.status === 'completed').length}</p>
+            <p className="text-[9px] font-black text-emerald-400 uppercase">Done</p>
+          </div>
+          <div className="bg-rose-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-rose-700">{stats.totalWeight}kg</p>
+            <p className="text-[9px] font-black text-rose-400 uppercase">Saved</p>
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            const headers = "Title,Donor,Weight,Status,Category,Date\n";
+            const rows = allListings.map(f =>
+              `"${f.title}","${f.donorId?.fullName || 'N/A'}","${f.weight}kg","${f.status}","${f.wasteCategory}","${new Date(f.createdAt).toLocaleDateString()}"`
+            );
+            const blob = new Blob([headers + rows.join("\n")], { type: "text/csv" });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `FoodWise_Listings_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            toast.success("Listings CSV Exported");
+          }}
+          className="w-full py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-amber-500 transition-all"
+        >
+          <FaFileDownload /> Export Listings CSV
+        </button>
+      </div>
+
+      {/* PAYMENT REPORT */}
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+        <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+          <FaTag className="text-blue-500" /> Payment Report
+        </h3>
+        <p className="text-slate-400 text-xs">Total revenue, transactions, average order value.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-blue-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-blue-700">Rs. {payments.reduce((a, p) => a + (p.foodId?.price || 0), 0)}</p>
+            <p className="text-[9px] font-black text-blue-400 uppercase">Revenue</p>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-purple-700">{payments.length}</p>
+            <p className="text-[9px] font-black text-purple-400 uppercase">Orders</p>
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            const headers = "Food,Receiver,Amount,Date\n";
+            const rows = payments.map(p =>
+              `"${p.foodId?.title}","${p.receiverId?.fullName}","Rs. ${p.foodId?.price}","${new Date(p.updatedAt).toLocaleDateString()}"`
+            );
+            const blob = new Blob([headers + rows.join("\n")], { type: "text/csv" });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `FoodWise_Payments_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            toast.success("Payments CSV Exported");
+          }}
+          className="w-full py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-600 transition-all"
+        >
+          <FaFileDownload /> Export Payments CSV
+        </button>
+      </div>
+
+      {/* REVIEW REPORT */}
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+        <h3 className="font-black text-slate-800 text-lg flex items-center gap-2">
+          <FaStar className="text-amber-400" /> Review Report
+        </h3>
+        <p className="text-slate-400 text-xs">Ratings submitted by receivers for donors.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-amber-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-amber-700">{reviews.length}</p>
+            <p className="text-[9px] font-black text-amber-400 uppercase">Reviews</p>
+          </div>
+          <div className="bg-emerald-50 p-4 rounded-2xl text-center">
+            <p className="text-2xl font-black text-emerald-700">
+              {reviews.length > 0 ? (reviews.reduce((a, r) => a + r.rating, 0) / reviews.length).toFixed(1) : "—"}
+            </p>
+            <p className="text-[9px] font-black text-emerald-400 uppercase">Avg Rating</p>
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            const headers = "Food,Reviewer,Rating,Comment,Date\n";
+            const rows = reviews.map(r =>
+              `"${r.foodId?.title}","${r.receiverId?.fullName}","${r.rating}/5","${r.ratingComment || ''}","${new Date(r.updatedAt).toLocaleDateString()}"`
+            );
+            const blob = new Blob([headers + rows.join("\n")], { type: "text/csv" });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `FoodWise_Reviews_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            toast.success("Reviews CSV Exported");
+          }}
+          className="w-full py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-amber-500 transition-all"
+        >
+          <FaFileDownload /> Export Reviews CSV
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
 
           {/* APPROVALS (Preserved) */}
           {activeTab === "approvals" && (

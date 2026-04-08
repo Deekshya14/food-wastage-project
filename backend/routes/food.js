@@ -77,7 +77,7 @@ router.get("/", authMiddleware, async (req, res) => {
 
     // Use try/catch specifically for the find to see if index is missing
     let query = Food.find(filter).populate("donorId", "fullName email");
-    
+
 // 💡 If we ARE NOT searching by location, sort by newest first
 if (!lat || !lng) {
   query = query.sort({ createdAt: -1 });
@@ -208,4 +208,33 @@ router.get("/logs", authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
+// ⭐ ADD REVIEW ROUTE (Receiver submits review)
+router.patch("/review/:id", authMiddleware, async (req, res) => {
+  try {
+    const { rating, ratingComment } = req.body;
+
+    const food = await Food.findById(req.params.id);
+
+    if (!food) {
+      return res.status(404).json({ message: "Food not found" });
+    }
+
+    // Only allow review after completion
+    if (food.status !== "completed") {
+      return res.status(400).json({ message: "You can only review completed donations" });
+    }
+
+    // Save review
+    food.rating = rating;
+    food.ratingComment = ratingComment;
+
+    await food.save();
+
+    res.json({ message: "Review submitted successfully" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
 export default router;

@@ -381,74 +381,65 @@ useEffect(() => {
   };
 
   return (
-  <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
-    <Toaster />
-    <div className="max-w-7xl mx-auto grid lg:grid-cols-4 gap-8">
-      
-      {/* LEFT SIDEBAR - Matches Receiver/Admin Structure */}
-      <div className="lg:col-span-1 space-y-6">
-        {/* BRAND LOGO SECTION */}
-        <div className="flex items-center gap-3 px-4 mb-8">
-          <div className="h-12 w-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
-            <FaUtensils size={20} />
+  <div className="min-h-screen bg-[#F8FAFC] flex font-sans">
+  <Toaster />
+
+      {/* ===================== SIDEBAR ===================== */}
+      <aside className="w-80 bg-white border-r border-slate-200/60 p-6 flex flex-col gap-6 sticky top-0 h-screen z-40 overflow-y-auto">
+
+        {/* LOGO - matches receiver */}
+        <div className="px-2 pt-2 flex items-center gap-3">
+          <div className="w-11 h-11 bg-gradient-to-br from-emerald-400 to-blue-600 rounded-[1.2rem] flex items-center justify-center text-white shadow-lg shadow-blue-100">
+            <FaUtensils size={22} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tighter">FoodWise</h2>
-            <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] leading-none">Connect</p>
+            <h2 className="font-black text-lg tracking-tighter text-slate-800 leading-none">
+              FOODWISE<span className="text-blue-600">CONNECT</span>
+            </h2>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">Donor Portal</p>
           </div>
         </div>
 
-        <ProfileCard user={user} />
-        
-        {/* QUICK ACTIONS PANEL */}
-        <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-slate-50 rounded-lg">
-              <FaPlus className="text-slate-400" size={12} />
-            </div>
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Donor Tools
-            </h4>
-          </div>
-
-          <div className="space-y-3">
-            <button 
-              onClick={() => setShowForm(!showForm)}
-              className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all group ${
-                showForm 
-                ? "bg-rose-50 text-rose-600" 
-                : "bg-blue-600 text-white shadow-lg shadow-blue-100 hover:bg-blue-700"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                {showForm ? <FaPlus className="rotate-45 transition-transform" /> : <FaPlus className="group-hover:scale-110 transition-transform" />}
-                <span className="font-bold text-xs">{showForm ? "Close Form" : "Create Listing"}</span>
-              </div>
-            </button>
-
-            <button 
-              onClick={() => { setChatPartnerId(null); setShowChat(true); }}
-              className="w-full flex items-center justify-between p-4 rounded-2xl bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-600 transition-all group"
-            >
-              <div className="flex items-center gap-3">
-                <FaComments className="group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-xs">Messages</span>
-              </div>
-              <div className="h-2 w-2 rounded-full bg-blue-400 animate-pulse"></div>
-            </button>
-          </div>
+        {/* PROFILE CARD */}
+        <div className="px-1">
+          <ProfileCard user={user} />
         </div>
-        
+
+        {/* NAV - matches receiver style */}
+        <nav className="flex-1 space-y-2 mt-2">
+          <p className="px-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Navigation</p>
+
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all ${
+              showForm
+                ? "bg-slate-900 text-white shadow-2xl shadow-slate-300 scale-[1.02]"
+                : "text-slate-500 hover:bg-slate-50"
+            }`}
+          >
+            <FaPlus size={18} /> {showForm ? "Close Form" : "Create Listing"}
+          </button>
+
+          <button
+            onClick={() => { setChatPartnerId(null); setShowChat(true); }}
+            className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all"
+          >
+            <FaComments size={18} /> Messages
+          </button>
+        </nav>
+
         {/* HELPER INFO BOX */}
         <div className="bg-emerald-50/50 p-6 rounded-[2.5rem] border border-emerald-100/50">
-           <p className="text-[11px] font-medium text-emerald-700 leading-relaxed italic">
-             "Your contribution helps feed those in need and reduces environmental waste."
-           </p>
+          <p className="text-[11px] font-medium text-emerald-700 leading-relaxed italic">
+            "Your contribution helps feed those in need and reduces environmental waste."
+          </p>
         </div>
-      </div>
+
+      </aside>
+      {/* ===================== END SIDEBAR ===================== */}
 
       {/* RIGHT MAIN CONTENT */}
-      <div className="lg:col-span-3 space-y-8">
+      <div className="flex-1 p-10 space-y-8 overflow-y-auto">
         
         {/* TOP HEADER WITH NOTIFICATION BELL */}
         <div className="flex justify-between items-center bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
@@ -703,12 +694,20 @@ useEffect(() => {
                   <div className="p-7 space-y-4 flex-1 flex flex-col">
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-black text-slate-800 text-xl leading-tight truncate pr-4">{f.title}</h3>
-                        <span className={`shrink-0 px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${f.status === 'reserved' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                          {f.status === 'reserved' ? '● Reserved' : '● Available'}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-4">
+  <h3 className="font-black text-slate-800 text-xl leading-tight truncate pr-4">{f.title}</h3>
+  <span className={`shrink-0 px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${f.status === 'reserved' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+    {f.status === 'reserved' ? '● Reserved' : '● Available'}
+  </span>
+</div>
+
+{/* DESCRIPTION */}
+{f.description && (
+  <p className="text-[11px] text-slate-400 font-medium leading-relaxed line-clamp-2 mb-2">
+    {f.description}
+  </p>
+)}
+
+<div className="flex flex-wrap gap-2 mt-4">
                         <span className="text-blue-600 text-[9px] font-black uppercase bg-blue-50 px-3 py-1.5 rounded-xl flex items-center gap-1.5"><FaLeaf size={10} /> {f.wasteCategory}</span>
                         <span className="text-emerald-600 text-[9px] font-black uppercase bg-emerald-50 px-3 py-1.5 rounded-xl flex items-center gap-1.5"><FaUtensils size={10} /> {f.foodState}</span>
                       </div>
@@ -892,7 +891,7 @@ useEffect(() => {
                           <FaStar key={i} size={10} className={i < req.rating ? "text-amber-400" : "text-slate-200"} />
                         ))}
                       </div>
-                      <p className="text-[11px] font-medium text-slate-500 italic">"{req.comment || "No comment provided."}"</p>
+                   <p className="text-[11px] font-medium text-slate-500 italic">"{req.ratingComment || req.comment || "No comment provided."}"</p>
                       <p className="text-[9px] font-black text-slate-400 uppercase mt-3">— {req.receiverId?.fullName}</p>
                     </div>
                   ) : (
@@ -906,7 +905,6 @@ useEffect(() => {
           </div>
         </div>
       </div>
-    </div>
 
     {showChat && <ChatLayout partnerId={chatPartnerId} onClose={() => setShowChat(false)} />}
   </div>

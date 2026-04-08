@@ -14,6 +14,7 @@ const requestSchema = new mongoose.Schema({
   isPaid: { type: Boolean, default: false },
 paymentStatus: { type: String, default: "unpaid" },
 pidx: { type: String },
+paidAmount: { type: Number, default: 0 },
 
   // ADD THESE TWO FIELDS
   rating: { type: Number, min: 1, max: 5 },

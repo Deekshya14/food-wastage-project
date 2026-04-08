@@ -1,5 +1,6 @@
 import express from "express";
 import Request from "../models/Request.js";
+import Notification from "../models/Notification.js";
 
 const router = express.Router();
 
@@ -35,14 +36,39 @@ router.post("/initiate", async (req, res) => {
 
 // Route 2: Khalti Callback (called by Khalti after payment)
 router.get("/callback", async (req, res) => {
-  const { pidx, status, purchase_order_id } = req.query;
+  const { pidx, status, purchase_order_id, amount } = req.query; // 👈 add amount
 
   if (status === "Completed") {
     try {
-      await Request.findOneAndUpdate(
-        { foodId: purchase_order_id },
-        { isPaid: true, paymentStatus: "paid", pidx: pidx }
-      );
+      const updatedRequest = await Request.findOneAndUpdate(
+        { 
+          foodId: purchase_order_id,
+          status: "approved" // 👈 only update approved requests
+        },
+        { 
+          isPaid: true, 
+          paymentStatus: "paid", 
+          pidx: pidx,
+          paidAmount: parseInt(amount) / 100 // 👈 save actual amount in RS
+        },
+        { new: true }
+      ).populate("foodId");
+
+      // 🔔 Notify the donor in real-time
+      const io = req.app.get("io");
+      if (io && updatedRequest?.foodId?.donorId) {
+        const donorId = updatedRequest.foodId.donorId.toString();
+        const msg = `💰 Payment received for "${updatedRequest.foodId.title}"!`;
+
+        // Save notification to DB
+        await Notification.create({ userId: donorId, message: msg });
+
+        // Send real-time to donor
+        io.to(`donor_${donorId}`).emit("newNotification", {
+          message: msg,
+          type: "PAYMENT_RECEIVED"
+        });
+      }
     } catch (err) {
       console.error("Callback DB update failed:", err);
     }

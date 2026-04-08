@@ -78,9 +78,10 @@ if (io) {
 }
 
     await Notification.create({
-      userId: food.donorId,
-      message: `New request from ${req.user.fullName} for "${food.title}"`,
-    });
+  userId: food.donorId,
+  message: `New request from ${req.user.fullName} for "${food.title}"`,
+  type: "request_new" 
+});
 
     res.status(201).json(request);
   } catch (err) {
@@ -120,9 +121,10 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
 
     // 1. Save to MongoDB
     await Notification.create({ 
-      userId: request.receiverId, 
-      message: statusMsg 
-    });
+  userId: request.receiverId, 
+  message: statusMsg,
+  type: "request_approved" 
+});
 
     // 2. Send Real-time via Socket
     if (io) {
@@ -145,18 +147,43 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
 router.post("/:id/rate", authMiddleware, async (req, res) => {
   try {
     const { rating, comment } = req.body;
-    const request = await Request.findById(req.params.id);
+    const request = await Request.findById(req.params.id).populate("foodId");
 
     if (!request) return res.status(404).json({ message: "Request not found" });
-    if (request.receiverId.toString() !== req.user.id) return res.status(403).json({ message: "Unauthorized" });
+    if (request.receiverId.toString() !== req.user.id) 
+      return res.status(403).json({ message: "Unauthorized" });
     
     request.rating = rating;
     request.ratingComment = comment; 
     await request.save();
 
+    // 🔔 Notify donor about the new review
+    const io = req.app.get("io");
+    const stars = "★".repeat(rating) + "☆".repeat(5 - rating);
+    const msg = `⭐ ${req.user.fullName} rated "${request.foodId?.title}" ${stars} (${rating}/5)`;
+
+    if (request.foodId?.donorId) {
+      const donorId = request.foodId.donorId.toString();
+      
+      await Notification.create({ 
+  userId: donorId, 
+  message: msg,
+  type: "NEW_REVIEW" 
+});
+
+      if (io) {
+        io.to(`donor_${donorId}`).emit("newNotification", {
+          message: msg,
+          type: "NEW_REVIEW"
+        });
+      }
+    }
+
     res.json({ success: true, message: "Feedback saved!" });
-  } catch (err) {
-    res.status(500).json({ message: "Rating failed" });
+  // REPLACE:
+} catch (err) {
+    console.error("RATING ERROR:", err.message); // 👈 ADD THIS
+    res.status(500).json({ message: err.message }); // 👈 show real error
   }
 });
 
@@ -171,6 +198,27 @@ router.get("/payments", authMiddleware, adminMiddleware, async (req, res) => {
     res.json(paidRequests);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch payments" });
+  }
+});
+
+// Admin: Get all rated requests
+router.get("/all-reviews", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const rated = await Request.find({ rating: { $exists: true, $ne: null } })
+      .populate({
+        path: "foodId",
+        select: "title image donorId",
+        populate: { path: "donorId", select: "fullName email" }
+      })
+      .populate("receiverId", "fullName email")
+      .sort({ updatedAt: -1 });
+
+      // 👇 ADD THIS TEMPORARILY
+    console.log("First review food:", JSON.stringify(rated[0]?.foodId, null, 2));
+    
+    res.json(rated);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch reviews" });
   }
 });
 

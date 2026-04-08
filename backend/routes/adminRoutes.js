@@ -22,6 +22,24 @@ router.get("/complaints", authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
+
+// POST a new complaint (any logged-in receiver)
+router.post("/complaints", authMiddleware, async (req, res) => {
+  try {
+    const { reason, description, reportedUserId, foodId } = req.body;
+    const complaint = await Complaint.create({
+      userId: req.user.id,
+      reason,
+      description,
+      reportedUserId,
+      foodId,
+    });
+    res.status(201).json(complaint);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to submit complaint" });
+  }
+});
+
 // @route   GET /api/reports/summary
 router.get("/summary", authMiddleware, adminMiddleware, async (req, res) => {
   try {

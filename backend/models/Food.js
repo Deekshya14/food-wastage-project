@@ -83,6 +83,18 @@ const foodSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
+    rating: {
+  type: Number,
+  min: 1,
+  max: 5,
+},
+
+ratingComment: {
+  type: String,
+  maxlength: 200,
+},
+
   },
   { timestamps: true }
 );
