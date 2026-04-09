@@ -203,7 +203,7 @@ setStats({
             { id: "users", label: "Members", icon: <FaUsers /> },
             { id: "listings", label: "Inventory", icon: <FaUtensils /> },
             { id: "feedback", label: "Reviews", icon: <FaStar /> },
-            { id: "complaints", label: "Complaints", icon: <FaExclamationTriangle />, count: complaints.length },
+            { id: "complaints", label: "Complaints", icon: <FaExclamationTriangle />, count: complaints.filter(c => c.status === "pending").length },
             { id: "reports", label: "Reports", icon: <FaFileDownload /> },
 { id: "payments", label: "Payments", icon: <FaTag />, count: payments.length },
           ].map(item => (
@@ -355,7 +355,10 @@ setStats({
                     <tr><th className="p-6">Member Identity</th><th className="p-6">Role</th><th className="p-6">Email Verification</th><th className="p-6">Status</th><th className="p-6 text-right">Moderation</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {allUsers.filter(u => u.fullName.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
+                    {allUsers.filter(u => 
+  u.role !== 'admin' && 
+  u.fullName.toLowerCase().includes(searchTerm.toLowerCase())
+).map(u => (
                       <tr key={u._id} className="hover:bg-emerald-50/20 transition-colors">
                         <td className="p-6"><p className="font-bold text-slate-700">{u.fullName}</p><p className="text-[11px] text-slate-400">{u.email}</p></td>
                         <td className="p-6"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${u.role === 'admin' ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-100 text-slate-500'}`}>{u.role}</span></td>
@@ -468,13 +471,15 @@ setStats({
       <table className="w-full text-left">
         <thead className="bg-slate-50 text-[10px] uppercase font-black text-slate-400">
           <tr>
-            <th className="p-6">Food Item</th>
-            <th className="p-6">Receiver</th>
-            <th className="p-6">Amount</th>
-            <th className="p-6">PIDX</th>
-            <th className="p-6">Status</th>
-            <th className="p-6">Date</th>
-          </tr>
+  <th className="p-6">Food Item</th>
+  <th className="p-6">Donor</th>
+  <th className="p-6">Receiver</th>
+  <th className="p-6">Amount</th>
+  <th className="p-6">Method</th>
+  <th className="p-6">PIDX</th>
+  <th className="p-6">Status</th>
+  <th className="p-6">Date</th>
+</tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
           {payments.length === 0 ? (
@@ -486,40 +491,45 @@ setStats({
           ) : (
             payments.map((p) => (
               <tr key={p._id} className="hover:bg-slate-50 transition-colors">
-                <td className="p-6">
-                  <div className="flex items-center gap-3">
-                    <img 
-                      src={`${API}/uploads/${p.foodId?.image}`} 
-                      className="w-10 h-10 rounded-xl object-cover" 
-                    />
-                    <p className="font-black text-slate-700 text-xs">{p.foodId?.title || "N/A"}</p>
-                  </div>
-                </td>
-                <td className="p-6">
-                  <p className="font-bold text-slate-700 text-xs">{p.receiverId?.fullName}</p>
-                  <p className="text-[10px] text-slate-400">{p.receiverId?.email}</p>
-                </td>
-                <td className="p-6">
-                  <span className="font-black text-emerald-600 text-sm">
-  Rs. {p.paidAmount || p.foodId?.price || 0}
-</span>
-                </td>
-                <td className="p-6">
-                  <span className="font-mono text-[9px] text-slate-400 truncate max-w-[100px] block">
-                    {p.pidx || "—"}
-                  </span>
-                </td>
-                <td className="p-6">
-                  <span className="bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1 rounded-full uppercase">
-                    ✓ Paid
-                  </span>
-                </td>
-                <td className="p-6">
-                  <p className="text-[10px] font-bold text-slate-400">
-                    {new Date(p.updatedAt).toLocaleDateString()}
-                  </p>
-                </td>
-              </tr>
+  <td className="p-6">
+    <div className="flex items-center gap-3">
+      <img src={`${API}/uploads/${p.foodId?.image}`} className="w-10 h-10 rounded-xl object-cover" />
+      <p className="font-black text-slate-700 text-xs">{p.foodId?.title || "N/A"}</p>
+    </div>
+  </td>
+  <td className="p-6">
+    <p className="font-bold text-slate-700 text-xs">{p.foodId?.donorId?.fullName || "N/A"}</p>
+  </td>
+  <td className="p-6">
+    <p className="font-bold text-slate-700 text-xs">{p.receiverId?.fullName}</p>
+    <p className="text-[10px] text-slate-400">{p.receiverId?.email}</p>
+  </td>
+  <td className="p-6">
+    <span className="font-black text-emerald-600 text-sm">
+      Rs. {p.paidAmount || p.foodId?.price || 0}
+    </span>
+  </td>
+  <td className="p-6">
+    <span className="bg-purple-50 text-purple-600 text-[9px] font-black px-3 py-1 rounded-full uppercase flex items-center gap-1 w-fit">
+      🏦 Khalti
+    </span>
+  </td>
+  <td className="p-6">
+    <span className="font-mono text-[9px] text-slate-400 truncate max-w-[100px] block">
+      {p.pidx || "—"}
+    </span>
+  </td>
+  <td className="p-6">
+    <span className="bg-emerald-50 text-emerald-600 text-[9px] font-black px-3 py-1 rounded-full uppercase">
+      ✓ Paid
+    </span>
+  </td>
+  <td className="p-6">
+    <p className="text-[10px] font-bold text-slate-400">
+      {new Date(p.updatedAt).toLocaleDateString()}
+    </p>
+  </td>
+</tr>
             ))
           )}
         </tbody>
@@ -534,7 +544,7 @@ setStats({
     {complaints.length === 0 ? (
       <EmptyState text="No complaints submitted yet." />
     ) : (
-      complaints.map((c) => (
+      complaints.filter(c => c.status === "pending").map((c) => (
         <div key={c._id} className="p-8 bg-white border border-rose-100 rounded-[2.5rem] flex flex-col md:flex-row justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -548,9 +558,44 @@ setStats({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button className="bg-slate-900 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase hover:bg-slate-700 transition-all">Dismiss</button>
-            <button className="bg-rose-500 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase hover:bg-rose-600 transition-all">Suspend User</button>
-          </div>
+  <button 
+    onClick={async () => {
+      try {
+        const res = await fetch(`${API}/api/reports/complaints/${c._id}/dismiss`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          toast.success("Complaint dismissed");
+          fetchAllData();
+        }
+      } catch { toast.error("Failed to dismiss"); }
+    }}
+    className="bg-slate-900 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase hover:bg-slate-700 transition-all"
+  >
+    Dismiss
+  </button>
+  <button 
+    onClick={async () => {
+      if (!window.confirm("Are you sure you want to suspend this user?")) return;
+      try {
+        const res = await fetch(`${API}/api/reports/complaints/${c._id}/suspend-user`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          toast.success("User suspended successfully");
+          fetchAllData();
+        } else {
+          toast.error("Failed to suspend user");
+        }
+      } catch { toast.error("Server error"); }
+    }}
+    className="bg-rose-500 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase hover:bg-rose-600 transition-all"
+  >
+    Suspend User
+  </button>
+</div>
         </div>
       ))
     )}
@@ -588,20 +633,30 @@ setStats({
           <FaUtensils className="text-amber-500" /> Food Report
         </h3>
         <p className="text-slate-400 text-xs">Listings created, completed handovers, total weight saved.</p>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-amber-50 p-4 rounded-2xl text-center">
-            <p className="text-2xl font-black text-amber-700">{allListings.length}</p>
-            <p className="text-[9px] font-black text-amber-400 uppercase">Total</p>
-          </div>
-          <div className="bg-emerald-50 p-4 rounded-2xl text-center">
-            <p className="text-2xl font-black text-emerald-700">{allListings.filter(f => f.status === 'completed').length}</p>
-            <p className="text-[9px] font-black text-emerald-400 uppercase">Done</p>
-          </div>
-          <div className="bg-rose-50 p-4 rounded-2xl text-center">
-            <p className="text-2xl font-black text-rose-700">{stats.totalWeight}kg</p>
-            <p className="text-[9px] font-black text-rose-400 uppercase">Saved</p>
-          </div>
-        </div>
+        <div className="grid grid-cols-2 gap-3">
+  <div className="bg-emerald-50 p-4 rounded-2xl text-center">
+    <p className="text-2xl font-black text-emerald-700">{allUsers.filter(u => u.role === 'donor').length}</p>
+    <p className="text-[9px] font-black text-emerald-400 uppercase">Donors</p>
+  </div>
+  <div className="bg-blue-50 p-4 rounded-2xl text-center">
+    <p className="text-2xl font-black text-blue-700">{allUsers.filter(u => u.role === 'receiver').length}</p>
+    <p className="text-[9px] font-black text-blue-400 uppercase">Receivers</p>
+  </div>
+</div>
+<div className="grid grid-cols-3 gap-3">
+  <div className="bg-amber-50 p-4 rounded-2xl text-center">
+    <p className="text-2xl font-black text-amber-700">{allListings.length}</p>
+    <p className="text-[9px] font-black text-amber-400 uppercase">Total Listings</p>
+  </div>
+  <div className="bg-emerald-50 p-4 rounded-2xl text-center">
+    <p className="text-2xl font-black text-emerald-700">{allListings.filter(f => f.status === 'completed').length}</p>
+    <p className="text-[9px] font-black text-emerald-400 uppercase">Completed</p>
+  </div>
+  <div className="bg-rose-50 p-4 rounded-2xl text-center">
+    <p className="text-2xl font-black text-rose-700">{stats.totalWeight}kg</p>
+    <p className="text-[9px] font-black text-rose-400 uppercase">Saved</p>
+  </div>
+</div>
         <button
           onClick={() => {
             const headers = "Title,Donor,Weight,Status,Category,Date\n";
@@ -628,30 +683,34 @@ setStats({
           <FaTag className="text-blue-500" /> Payment Report
         </h3>
         <p className="text-slate-400 text-xs">Total revenue, transactions, average order value.</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-blue-50 p-4 rounded-2xl text-center">
-            <p className="text-2xl font-black text-blue-700">Rs. {payments.reduce((a, p) => a + (p.foodId?.price || 0), 0)}</p>
-            <p className="text-[9px] font-black text-blue-400 uppercase">Revenue</p>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-2xl text-center">
-            <p className="text-2xl font-black text-purple-700">{payments.length}</p>
-            <p className="text-[9px] font-black text-purple-400 uppercase">Orders</p>
-          </div>
-        </div>
+        <div className="grid grid-cols-3 gap-3">
+  <div className="bg-blue-50 p-4 rounded-2xl text-center">
+    <p className="text-2xl font-black text-blue-700">Rs. {payments.reduce((a, p) => a + (p.foodId?.price || 0), 0)}</p>
+    <p className="text-[9px] font-black text-blue-400 uppercase">Revenue</p>
+  </div>
+  <div className="bg-purple-50 p-4 rounded-2xl text-center">
+    <p className="text-2xl font-black text-purple-700">{payments.length}</p>
+    <p className="text-[9px] font-black text-purple-400 uppercase">Orders</p>
+  </div>
+  <div className="bg-emerald-50 p-4 rounded-2xl text-center">
+    <p className="text-lg font-black text-emerald-700">Khalti</p>
+    <p className="text-[9px] font-black text-emerald-400 uppercase">Method</p>
+  </div>
+</div>
         <button
           onClick={() => {
-            const headers = "Food,Receiver,Amount,Date\n";
-            const rows = payments.map(p =>
-              `"${p.foodId?.title}","${p.receiverId?.fullName}","Rs. ${p.foodId?.price}","${new Date(p.updatedAt).toLocaleDateString()}"`
-            );
-            const blob = new Blob([headers + rows.join("\n")], { type: "text/csv" });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `FoodWise_Payments_${new Date().toISOString().split('T')[0]}.csv`;
-            link.click();
-            toast.success("Payments CSV Exported");
-          }}
+  const headers = "Food,Donor,Receiver,Amount,Payment Method,Date\n";
+  const rows = payments.map(p =>
+    `"${p.foodId?.title}","${p.foodId?.donorId?.fullName || 'N/A'}","${p.receiverId?.fullName}","Rs. ${p.foodId?.price}","Khalti","${new Date(p.updatedAt).toLocaleDateString()}"`
+  );
+  const blob = new Blob([headers + rows.join("\n")], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `FoodWise_Payments_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+  toast.success("Payments CSV Exported");
+}}
           className="w-full py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-600 transition-all"
         >
           <FaFileDownload /> Export Payments CSV
@@ -678,18 +737,18 @@ setStats({
         </div>
         <button
           onClick={() => {
-            const headers = "Food,Reviewer,Rating,Comment,Date\n";
-            const rows = reviews.map(r =>
-              `"${r.foodId?.title}","${r.receiverId?.fullName}","${r.rating}/5","${r.ratingComment || ''}","${new Date(r.updatedAt).toLocaleDateString()}"`
-            );
-            const blob = new Blob([headers + rows.join("\n")], { type: "text/csv" });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `FoodWise_Reviews_${new Date().toISOString().split('T')[0]}.csv`;
-            link.click();
-            toast.success("Reviews CSV Exported");
-          }}
+  const headers = "Food,Donor,Reviewer,Rating,Comment,Date\n";
+  const rows = reviews.map(r =>
+    `"${r.foodId?.title}","${r.foodId?.donorId?.fullName || 'N/A'}","${r.receiverId?.fullName}","${r.rating}/5","${r.ratingComment || ''}","${new Date(r.updatedAt).toLocaleDateString()}"`
+  );
+  const blob = new Blob([headers + rows.join("\n")], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `FoodWise_Reviews_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+  toast.success("Reviews CSV Exported");
+}}
           className="w-full py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-amber-500 transition-all"
         >
           <FaFileDownload /> Export Reviews CSV

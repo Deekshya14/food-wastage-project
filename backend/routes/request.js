@@ -192,7 +192,11 @@ router.post("/:id/rate", authMiddleware, async (req, res) => {
 router.get("/payments", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const paidRequests = await Request.find({ isPaid: true })
-      .populate("foodId", "title price image")
+      .populate({
+  path: "foodId",
+  select: "title price image donorId",
+  populate: { path: "donorId", select: "fullName email" }
+})
       .populate("receiverId", "fullName email")
       .sort({ updatedAt: -1 });
     res.json(paidRequests);

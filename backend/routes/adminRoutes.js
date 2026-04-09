@@ -40,6 +40,36 @@ router.post("/complaints", authMiddleware, async (req, res) => {
   }
 });
 
+
+
+// Dismiss a complaint
+router.patch("/complaints/:id/dismiss", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    await Complaint.findByIdAndUpdate(req.params.id, { status: "dismissed" });
+    res.json({ message: "Complaint dismissed" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to dismiss complaint" });
+  }
+});
+
+// Suspend the reported user from a complaint
+router.patch("/complaints/:id/suspend-user", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const complaint = await Complaint.findById(req.params.id);
+    if (!complaint) return res.status(404).json({ message: "Complaint not found" });
+
+    // Suspend the reported user
+    await User.findByIdAndUpdate(complaint.reportedUserId, { status: "banned" });
+    
+    // Also mark complaint as resolved
+    await Complaint.findByIdAndUpdate(req.params.id, { status: "resolved" });
+
+    res.json({ message: "User suspended and complaint resolved" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to suspend user" });
+  }
+});
+
 // @route   GET /api/reports/summary
 router.get("/summary", authMiddleware, adminMiddleware, async (req, res) => {
   try {
