@@ -70,25 +70,35 @@ socket.on("joinRoom", (roomName) => {
 });
 
   // --- SEND MESSAGE ---
-  socket.on("sendMessage", (savedMsg) => {
-  // 1. The message is already saved in the DB by the API route.
-  // 2. We use the roomId that the database/API already created.
+  
+socket.on("sendMessage", async (savedMsg) => {
   const roomId = savedMsg.roomId;
-
-  // 3. Send the message to everyone in that room
-  // We use 'receiveMessage' to match what your ChatWindow is listening for
   socket.to(roomId).emit("receiveMessage", savedMsg);
 
-  // 4. Send notification to receiver if they aren't in the room
   const receiverId = savedMsg.receiver;
   const receiverSocketId = onlineUsers[receiverId];
   
   if (receiverSocketId) {
-    io.to(receiverSocketId).emit("newNotification", {
-      senderId: savedMsg.sender,
-      text: savedMsg.text,
-      messageId: savedMsg._id,
-    });
+    // Look up sender name from DB
+    try {
+      const sender = await mongoose.model("User").findById(savedMsg.sender).select("fullName");
+      const senderName = sender?.fullName || "Someone";
+      
+      io.to(receiverSocketId).emit("newNotification", {
+        senderId: savedMsg.sender,
+        message: `💬 ${senderName}: ${savedMsg.text}`,  // ← proper message now
+        type: "message",
+        messageId: savedMsg._id,
+      });
+    } catch (err) {
+      // fallback if lookup fails
+      io.to(receiverSocketId).emit("newNotification", {
+        senderId: savedMsg.sender,
+        message: `💬 New message: ${savedMsg.text}`,
+        type: "message",
+        messageId: savedMsg._id,
+      });
+    }
   }
 });
 

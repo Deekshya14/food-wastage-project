@@ -69,8 +69,8 @@ if (io) {
   console.log("Emitting to Room:", donorRoom);
   
   io.to(donorRoom).emit("newNotification", {
-    message: `New request from ${req.user.fullName} for "${food.title}"`,
-    type: "NEW_REQUEST"
+    message: `New request from ${req.currentUser?.fullName || 'Someone'} for "${food.title}"`,
+type: "NEW_REQUEST"
   });
   console.log("--- EMIT SUCCESSFUL ---");
 } else {
@@ -79,8 +79,8 @@ if (io) {
 
     await Notification.create({
   userId: food.donorId,
-  message: `New request from ${req.user.fullName} for "${food.title}"`,
-  type: "request_new" 
+  type: "NEW_REQUEST",
+  message: `New request from ${req.currentUser?.fullName || 'Someone'} for "${food.title}"`,
 });
 
     res.status(201).json(request);
@@ -93,12 +93,20 @@ if (io) {
 router.put("/:id/status", authMiddleware, async (req, res) => {
   try {
     const { status } = req.body;
-    const request = await Request.findById(req.params.id).populate("foodId");
+    const request = await Request.findById(req.params.id).populate({
+  path: "foodId",
+  populate: { path: "donorId", select: "fullName" }
+});
 
-    if (!request) return res.status(404).json({ message: "Request not found" });
-    
-    if (request.foodId.donorId.toString() !== req.user.id)
-      return res.status(403).json({ message: "Unauthorized" });
+if (!request) return res.status(404).json({ message: "Request not found" });
+
+// Extract donorId safely — handle both populated object and plain ID
+const donorId = request.foodId?.donorId?._id 
+  ? request.foodId.donorId._id.toString() 
+  : request.foodId?.donorId?.toString();
+
+if (donorId !== req.user.id)
+  return res.status(403).json({ message: "Unauthorized" });
 
     request.status = status;
     await request.save();
@@ -117,7 +125,12 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
 
     // --- 🔔 NOTIFICATION LOGIC ---
     const io = req.app.get("io");
-    const statusMsg = `Your request for "${request.foodId.title}" has been ${status}.`;
+    const donorName = request.foodId?.donorId?.fullName || "The donor";
+const statusMsg = status === "completed"
+  ? `✅ ${donorName} confirmed your handover for "${request.foodId.title}"!`
+  : status === "approved"
+  ? `🎉 ${donorName} approved your request for "${request.foodId.title}"!`
+  : `❌ ${donorName} rejected your request for "${request.foodId.title}".`;
 
     // 1. Save to MongoDB
     await Notification.create({ 

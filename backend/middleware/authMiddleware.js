@@ -22,4 +22,3 @@ export const adminMiddleware = (req, res, next) => {
     return res.status(403).json({ message: "Admins only" });
   next();
 };
-

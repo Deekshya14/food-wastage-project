@@ -220,6 +220,23 @@ useEffect(() => {
     }
   });
 
+  socket.on("newFoodPosted", (data) => {
+  console.log("🍱 New food posted — refreshing browse");
+  // Refresh foods list
+  const headers = { Authorization: `Bearer ${token}` };
+  fetch(`${API}/api/food`, { headers })
+    .then(res => res.json())
+    .then(data => {
+      if (Array.isArray(data)) setFoods(data);
+    })
+    .catch(err => console.error("Food refresh failed:", err));
+
+  // Show a toast notification
+  toast(`🍱 ${data.message}`, {
+    duration: 4000,
+    style: { borderRadius: '15px', background: '#333', color: '#fff', fontSize: '12px' }
+  });
+});
   // Fires when donor approves, rejects, OR confirms handover
   socket.on("requestStatusUpdate", () => {
   console.log("🔄 Status update received — refreshing");

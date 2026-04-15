@@ -17,8 +17,9 @@ const notificationSchema = new mongoose.Schema({
     "PAYMENT_RECEIVED",
     "general"
   ],
-  required: true 
+  default: "general"
 },
+
   message: { type: String, required: true },
   relatedId: { type: mongoose.Schema.Types.ObjectId }, // ID of the Food or Request
   isRead: { type: Boolean, default: false },

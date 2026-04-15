@@ -44,7 +44,16 @@ router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
       details: `Donor ${req.user.fullName || 'User'} posted: ${req.body.title}`,
     });
 
-    res.status(201).json(food);
+    const io = req.app.get("io");
+if (io) {
+  io.emit("newFoodPosted", {
+    message: `New food available: "${food.title}"`,
+    food: food
+  });
+}
+
+res.status(201).json(food);
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
