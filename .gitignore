@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+# Environment files (IMPORTANT)
+.env
+backend/.env
+
+# Uploads (user files)
+backend/uploads/

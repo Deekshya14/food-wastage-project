@@ -92,10 +92,10 @@ export default function ChatLayout({ partnerId, onClose }) {
                   </p>
                 </div>
               ) : (
-                conversations.map((conv) => (
-                  <button
-                    key={conv._id}
-                    onClick={() => setSelectedPartner(conv.otherUser?._id)}
+                conversations.map((conv, index) => (
+  <button
+    key={conv._id || conv.otherUser?._id || index} // ✅ Falls back to user ID or array index
+    onClick={() => setSelectedPartner(conv.otherUser?._id)}
                     className="w-full p-4 bg-white hover:bg-emerald-50/50 rounded-[2rem] flex items-center gap-4 transition-all border border-transparent hover:border-emerald-100 hover:shadow-xl hover:shadow-emerald-900/5 group"
                   >
                     {/* Avatar with Initials logic */}

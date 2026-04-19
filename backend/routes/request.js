@@ -80,7 +80,8 @@ type: "NEW_REQUEST"
     await Notification.create({
   userId: food.donorId,
   type: "NEW_REQUEST",
-  message: `New request from ${req.currentUser?.fullName || 'Someone'} for "${food.title}"`,
+  senderId: req.user.id,
+message: `New request from ${req.user.fullName || 'Someone'} for "${food.title}"`,
 });
 
     res.status(201).json(request);
@@ -135,6 +136,7 @@ const statusMsg = status === "completed"
     // 1. Save to MongoDB
     await Notification.create({ 
   userId: request.receiverId, 
+  senderId: req.user.id,
   message: statusMsg,
   type: "request_approved" 
 });
@@ -181,6 +183,7 @@ router.post("/:id/rate", authMiddleware, async (req, res) => {
       await Notification.create({ 
   userId: donorId, 
   message: msg,
+  senderId: req.user.id,
   type: "NEW_REVIEW" 
 });
 
