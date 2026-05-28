@@ -5,7 +5,7 @@ import { useUser } from "../context/UserContext";
 export default function ProfileCard() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useUser();
+  const { user, token, logout } = useUser(); // Added 'token' from your custom context
 
   const role = location.pathname.includes("donor")
     ? "donor"
@@ -16,6 +16,50 @@ export default function ProfileCard() {
   const handleLogout = () => {
     logout();
     navigate("/");
+  };
+
+  /* =========================================
+     ✅ PERMANENT ACCOUNT DELETION LOGIC
+     ========================================= */
+  const handleDeleteAccount = async () => {
+    // 1. Double confirmation check safeguards
+    const firstCheck = window.confirm(
+      "⚠️ DANGER ZONE: Are you absolutely sure you want to permanently delete your account?"
+    );
+    if (!firstCheck) return;
+
+    const secondCheck = window.confirm(
+      "🚨 CRITICAL CONFIRMATION: This will delete your listing records, information, and account permanently from our databases. This cannot be undone. Proceed?"
+    );
+    if (!secondCheck) return;
+
+    try {
+      // 2. Fire request targeting your new backend DELETE user route
+      const res = await fetch(`${API_URL}/api/users/delete-account`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token || localStorage.getItem("token")}`, // Pass authentication authorization token
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message || "Failed to process database deletion request.");
+        return;
+      }
+
+      // 3. Clear frontend local session token context using your context wrapper
+      logout(); 
+      
+      alert("Your profile data has been deleted from our database successfully. Redirecting...");
+      window.location.href = "/"; // Complete hard refresh redirect to landing interface
+
+    } catch (err) {
+      console.error("Account destruction failure exception caught:", err);
+      alert("Network Error: Could not connect to authentication manager.");
+    }
   };
 
   // Logic for initials (e.g., "Deekshya Tiwari" -> "DT")
@@ -70,12 +114,23 @@ export default function ProfileCard() {
           Edit Profile
         </button>
 
-        <button
-          onClick={handleLogout}
-          className="w-full bg-white text-rose-500 border border-rose-100 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-rose-50 active:scale-95"
-        >
-          Logout
-        </button>
+        {/* Flex layout container splitting actions to maintain perfect dimensions */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={handleLogout}
+            className="w-full bg-slate-100 text-slate-700 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-slate-200 active:scale-95"
+          >
+            Logout
+          </button>
+
+          {/* ✅ NEW: Account Self Destruction Trigger Button */}
+          <button
+            onClick={handleDeleteAccount}
+            className="w-full bg-rose-50 text-rose-600 border border-rose-100/60 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:bg-rose-100 active:scale-95"
+          >
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -48,9 +48,15 @@ router.post("/:foodId", authMiddleware, async (req, res) => {
     }
 
     const existing = await Request.findOne({ foodId, receiverId: req.user.id });
-    if (existing) {
-      return res.status(400).json({ message: "You already requested this food" });
-    }
+if (existing) {
+  // If old request was rejected, delete it and allow re-request
+  if (existing.status === 'rejected') {
+    await Request.findByIdAndDelete(existing._id);
+    // continue to create new request below
+  } else {
+    return res.status(400).json({ message: "You already requested this food" });
+  }
+}
 
     const request = await Request.create({
       foodId,
@@ -82,6 +88,7 @@ type: "NEW_REQUEST"
   type: "NEW_REQUEST",
   senderId: req.user.id,
 message: `New request from ${req.user.fullName || 'Someone'} for "${food.title}"`,
+relatedId: request._id,
 });
 
     res.status(201).json(request);
@@ -114,15 +121,27 @@ if (donorId !== req.user.id)
 
     // Handle Food Model updates
     if (status === "approved") {
-      await Food.findByIdAndUpdate(request.foodId._id, { status: "reserved" });
-      await Request.updateMany(
-        { foodId: request.foodId._id, _id: { $ne: request._id } },
-        { status: "rejected" }
-      );
-    }
-    if (status === "completed") {
-      await Food.findByIdAndUpdate(request.foodId._id, { status: "completed" });
-    }
+  await Food.findByIdAndUpdate(request.foodId._id, { status: "reserved" });
+  await Request.updateMany(
+    { foodId: request.foodId._id, _id: { $ne: request._id } },
+    { status: "rejected" }
+  );
+}
+if (status === "rejected") {
+  // Check if there are any other approved requests for this food
+  const otherApproved = await Request.findOne({
+    foodId: request.foodId._id,
+    status: "approved",
+    _id: { $ne: request._id }
+  });
+  // If no other approved requests, make food available again
+  if (!otherApproved) {
+    await Food.findByIdAndUpdate(request.foodId._id, { status: "available" });
+  }
+}
+if (status === "completed") {
+  await Food.findByIdAndUpdate(request.foodId._id, { status: "completed" });
+}
 
     // --- 🔔 NOTIFICATION LOGIC ---
     const io = req.app.get("io");
@@ -138,20 +157,20 @@ const statusMsg = status === "completed"
   userId: request.receiverId, 
   senderId: req.user.id,
   message: statusMsg,
-  type: "request_approved" 
+  type: status === "completed" ? "request_completed" : status === "approved" ? "request_approved" : "request_rejected",  
+  relatedId: request._id,  
 });
 
     // 2. Send Real-time via Socket
     if (io) {
-      // Send to the specific receiver's room
-      io.to(request.receiverId.toString()).emit("newNotification", {
-        message: statusMsg,
-        time: new Date()
-      });
-      // Also tell their app to refresh the request list
-      io.to(request.receiverId.toString()).emit("requestStatusUpdate");
-    }
-
+  io.to(request.receiverId.toString()).emit("newNotification", {
+    message: statusMsg,
+    type: status === "completed" ? "request_completed" : status === "approved" ? "request_approved" : "request_rejected",
+    relatedId: request._id,
+    time: new Date()
+  });
+  io.to(request.receiverId.toString()).emit("requestStatusUpdate");
+}
     res.json(request);
   } catch (err) {
     res.status(500).json({ message: "Status update failed" });
@@ -175,35 +194,41 @@ router.post("/:id/rate", authMiddleware, async (req, res) => {
     // 🔔 Notify donor about the new review
     const io = req.app.get("io");
     const stars = "★".repeat(rating) + "☆".repeat(5 - rating);
-    const msg = `⭐ ${req.user.fullName} rated "${request.foodId?.title}" ${stars} (${rating}/5)`;
+    
+    // 💡 FIX: Pull the fully loaded text string using req.currentUser instead of req.user
+    const reviewerName = req.currentUser?.fullName || "A receiver";
+    const msg = `⭐ ${reviewerName} rated "${request.foodId?.title || 'your food'}" ${stars} (${rating}/5)`;
 
     if (request.foodId?.donorId) {
       const donorId = request.foodId.donorId.toString();
       
+      // 1. Write structured log to DB notification schema
       await Notification.create({ 
-  userId: donorId, 
-  message: msg,
-  senderId: req.user.id,
-  type: "NEW_REVIEW" 
-});
+        userId: donorId, 
+        message: msg,
+        senderId: req.user.id, // 👈 Passing senderId tells the frontend who clicked!
+        type: "NEW_REVIEW",
+        relatedId: request._id,  
+      });
 
+      // 2. Transmit via active web socket stream array
       if (io) {
         io.to(`donor_${donorId}`).emit("newNotification", {
+          senderId: req.user.id, // 👈 Added this so Donor layout receives it cleanly!
           message: msg,
-          type: "NEW_REVIEW"
+          type: "NEW_REVIEW",
+          relatedId: request._id
         });
       }
     }
 
     res.json({ success: true, message: "Feedback saved!" });
-  // REPLACE:
-} catch (err) {
-    console.error("RATING ERROR:", err.message); // 👈 ADD THIS
-    res.status(500).json({ message: err.message }); // 👈 show real error
+   
+  } catch (err) {
+    console.error("RATING ERROR:", err.message); 
+    res.status(500).json({ message: err.message }); 
   }
 });
-
-
 // Admin: Get all paid transactions
 router.get("/payments", authMiddleware, adminMiddleware, async (req, res) => {
   try {

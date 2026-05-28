@@ -201,6 +201,7 @@ useEffect(() => {
       _id: n._id || Date.now(),
       message: n.message,
       type: n.type || "general",
+      senderId: n.senderId || null,
       isRead: false,
       createdAt: new Date(),
     }, ...prev]);
@@ -447,7 +448,7 @@ const clearAllNotifications = () => {
         </nav>
       </aside>
 
-      {/* --- MAIN CONTENT --- */}
+     {/* --- MAIN CONTENT --- */}
       <main className="flex-1 p-10 max-w-[1600px] mx-auto w-full">
         <header className="flex justify-between items-start mb-8">
           <div>
@@ -461,56 +462,81 @@ const clearAllNotifications = () => {
             <button id="notif-bell-receiver" onClick={() => setShowNotifications(!showNotifications)} className="p-4 bg-white border border-slate-200 rounded-[1.2rem] hover:shadow-xl transition-all relative group">
               <FaBell className="text-slate-600 group-hover:rotate-12 transition-transform" />
               {notifications.filter(n => !n.isRead).length > 0 && (
-  <span className="absolute top-3 right-3 flex h-3 w-3">
-    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-    <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-white"></span>
-  </span>
-)}
+                <span className="absolute top-3 right-3 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500 border-2 border-white"></span>
+                </span>
+              )}
             </button>
             <AnimatePresence>
-  {showNotifications && (
-    <motion.div
-      ref={notificationRef}
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 15 }}
-      className="absolute right-0 mt-4 w-96 bg-white border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-[2rem] z-50 overflow-hidden p-4"
-    >
-      <div className="flex justify-between items-center px-2 mb-4">
-        <h3 className="font-black text-slate-800">Notifications</h3>
-        <button onClick={markAllAsRead} className="text-[10px] font-bold text-blue-500 hover:text-blue-700 uppercase tracking-tighter">
-          Mark all read
-        </button>
-      </div>
-      <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-        {notifications.length === 0 ? (
-          <div className="py-10 text-center">
-            <p className="text-gray-400 text-xs italic">No new alerts</p>
-          </div>
-        ) : (
-          notifications.map((n) => (
-            <div key={n._id} className={`p-3 rounded-2xl border-l-4 transition-all duration-300 ${n.isRead ? 'bg-slate-50 border-transparent text-slate-500' : 'bg-blue-50 border-blue-500 shadow-sm text-slate-900'}`}>
-              <div className="flex gap-3">
-                <div className={`p-2 rounded-lg h-fit ${n.isRead ? 'bg-gray-200 text-gray-400' : 'bg-blue-100 text-blue-600'}`}>
-                  <FaBell size={12} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[11px] leading-snug font-bold">{n.message}</p>
-                  <span className="text-[9px] text-gray-400 font-medium mt-1 block">
-                    {n.createdAt ? formatDistanceToNow(new Date(n.createdAt)) + " ago" : "Just now"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-      <button onClick={clearAllNotifications} className="w-full mt-4 py-2 text-[10px] font-black uppercase text-rose-500 hover:bg-rose-50 rounded-xl transition-all active:scale-95">
-        Clear List
-      </button>
-    </motion.div>
-  )}
-</AnimatePresence>
+              {showNotifications && (
+                <motion.div
+                  ref={notificationRef}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 15 }}
+                  className="absolute right-0 mt-4 w-96 bg-white border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.1)] rounded-[2rem] z-50 overflow-hidden p-4"
+                >
+                  <div className="flex justify-between items-center px-2 mb-4">
+                    <h3 className="font-black text-slate-800">Notifications</h3>
+                    <button onClick={markAllAsRead} className="text-[10px] font-bold text-blue-500 hover:text-blue-700 uppercase tracking-tighter">
+                      Mark all read
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {notifications.length === 0 ? (
+                      <div className="py-10 text-center">
+                        <p className="text-gray-400 text-xs italic">No new alerts</p>
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div 
+                          key={n._id} 
+                          onClick={() => {
+                            // Check if notification is for a chat/message
+                            if (n.type === "message" || n.type === "chat" || n.message.toLowerCase().includes("message")) {
+                              if (n.senderId) {
+                                setChatPartnerId(n.senderId); // Set active chat target
+                                setShowChat(true);            // Show chat window layout
+                              }
+                            } 
+                            // Determine which tab and action based on other notification types
+                            else if (n.type === "request_approved" || n.type === "request_rejected" || n.type === "request_completed") {
+                              setActiveTab("activity");
+                            } else if (n.type === "request_new" || n.type === "NEW_REQUEST") {
+                              setActiveTab("browse");
+                            }
+                            
+                            setShowNotifications(false);
+                            
+                            // Mark as read on click
+                            setNotifications(prev => prev.map(notif => 
+                              notif._id === n._id ? { ...notif, isRead: true } : notif
+                            ));
+                          }}
+                          className={`p-3 rounded-2xl border-l-4 transition-all duration-300 ${n.isRead ? 'bg-slate-50 border-transparent text-slate-500' : 'bg-blue-50 border-blue-500 shadow-sm text-slate-900'}`}
+                        >
+                          <div className="flex gap-3">
+                            <div className={`p-2 rounded-lg h-fit ${n.isRead ? 'bg-gray-200 text-gray-400' : 'bg-blue-100 text-blue-600'}`}>
+                              <FaBell size={12} />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-[11px] leading-snug font-bold">{n.message}</p>
+                              <span className="text-[9px] text-gray-400 font-medium mt-1 block">
+                                {n.createdAt ? formatDistanceToNow(new Date(n.createdAt)) + " ago" : "Just now"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <button onClick={clearAllNotifications} className="w-full mt-4 py-2 text-[10px] font-black uppercase text-rose-500 hover:bg-rose-50 rounded-xl transition-all active:scale-95">
+                    Clear List
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </header>
 
@@ -626,17 +652,26 @@ const clearAllNotifications = () => {
                             <FoodMeta food={r.foodId} />
                           </div>
                           <div className="flex flex-col gap-2">
-                            {status === 'approved' && r.foodId?.price > 0 && (
-  r.isPaid ? (
+                            {status === 'approved' && (() => {
+  const price = Number(r.foodId?.price);
+  const priceType = r.foodId?.priceType;
+  const needsPayment = priceType === 'paid' || price > 0;
+  
+  if (!needsPayment) return null;
+  
+  return r.isPaid ? (
     <div className="w-full py-3 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 border border-emerald-100">
       <FaCheckCircle /> Payment Confirmed ✓
     </div>
   ) : (
-    <button onClick={() => handlePayment(r.foodId)} className="w-full py-3 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-700 transition-all">
-      <FaTag /> Pay Rs. {r.foodId.price}
+    <button 
+      onClick={() => handlePayment(r.foodId)} 
+      className="w-full py-3 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-700 transition-all"
+    >
+      <FaTag /> Pay Rs. {price}
     </button>
-  )
-)}
+  );
+})()}
                             <button onClick={() => { setChatPartnerId(r.foodId?.donorId?._id || r.foodId?.donorId); setShowChat(true); }} className="w-full py-3 bg-slate-100 text-slate-600 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all">
                               <FaComments size={12} /> Contact
                             </button>
@@ -727,8 +762,8 @@ const clearAllNotifications = () => {
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-8">
                 {filteredFoods.length > 0 ? filteredFoods.map(f => {
                   const myReq = requests.find(r => 
-  r.foodId?._id?.toString() === f._id?.toString() || 
-  r.foodId === f._id
+  (r.foodId?._id?.toString() === f._id?.toString() || r.foodId === f._id)
+  && r.status !== "rejected"  // ← ignore rejected requests
 );
                   return (
                     <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} key={f._id} className="bg-white rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm flex flex-col hover:shadow-xl transition-all group">

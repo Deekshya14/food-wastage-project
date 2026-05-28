@@ -37,6 +37,8 @@ app.set("io", io); // Make io accessible inside routes
 app.use("/api/requests", requestRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/messages", messageRoutes);
+
+//app.use("/api/users", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/payment", paymentRoutes);
 
@@ -71,37 +73,48 @@ socket.on("joinRoom", (roomName) => {
 
   // --- SEND MESSAGE ---
   
-socket.on("sendMessage", async (savedMsg) => {
-  const roomId = savedMsg.roomId;
-  socket.to(roomId).emit("receiveMessage", savedMsg);
-
-  const receiverId = savedMsg.receiver;
-  const receiverSocketId = onlineUsers[receiverId];
-  
-  if (receiverSocketId) {
-    // Look up sender name from DB
+// --- SEND MESSAGE (UPDATED WITH SENDER NAME & SENDER ID) ---
+// --- SEND MESSAGE (UPDATED WITH BLOCK CHECKS) ---
+  socket.on("sendMessage", async (savedMsg) => {
     try {
-      const sender = await mongoose.model("User").findById(savedMsg.sender).select("fullName");
-      const senderName = sender?.fullName || "Someone";
-      
-      io.to(receiverSocketId).emit("newNotification", {
-        senderId: savedMsg.sender,
-        message: `💬 ${senderName}: ${savedMsg.text}`,  // ← proper message now
-        type: "message",
-        messageId: savedMsg._id,
-      });
-    } catch (err) {
-      // fallback if lookup fails
-      io.to(receiverSocketId).emit("newNotification", {
-        senderId: savedMsg.sender,
-        message: `💬 New message: ${savedMsg.text}`,
-        type: "message",
-        messageId: savedMsg._id,
-      });
-    }
-  }
-});
+      const senderId = savedMsg.sender;
+      const receiverId = savedMsg.receiver;
 
+      // 1. Fetch block details for both accounts dynamically from the database
+      const senderUser = await mongoose.model("User").findById(senderId).select("blockedUsers");
+      const receiverUser = await mongoose.model("User").findById(receiverId).select("blockedUsers");
+
+      // 2. If a block state exists in either direction, cancel the live network stream immediately
+      if (
+        senderUser?.blockedUsers?.includes(receiverId) || 
+        receiverUser?.blockedUsers?.includes(senderId)
+      ) {
+        console.log(`⚠️ WebSocket message suppressed: Block arrangement active between ${senderId} and ${receiverId}`);
+        return; // Stops execution dead so nobody gets the message on their screen
+      }
+
+      // 3. If clear, proceed with normal channel room broadcasting
+      const roomId = savedMsg.roomId;
+      socket.to(roomId).emit("receiveMessage", savedMsg);
+
+      const receiverSocketId = onlineUsers[receiverId];
+      if (receiverSocketId) {
+        // Fetch the sender details dynamically from your User Model
+        const sender = await mongoose.model("User").findById(senderId).select("fullName");
+        const senderName = sender?.fullName || "Someone";
+        
+        // Emit notification with both the name AND senderId
+        io.to(receiverSocketId).emit("newNotification", {
+          senderId: senderId,
+          message: `💬 ${senderName} sent you a message: "${savedMsg.text}"`,
+          type: "message",
+          messageId: savedMsg._id,
+        });
+      }
+    } catch (err) {
+      console.error("Socket block check operation failed:", err);
+    }
+  });
 
 socket.on("typing", ({ receiverId, userId }) => {
   const receiverSocketId = onlineUsers[receiverId];

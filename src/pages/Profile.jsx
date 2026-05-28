@@ -128,13 +128,7 @@ export default function Profile() {
           {loading ? "Saving..." : "Update Profile"}
         </button>
 
-        <button
-          onClick={handleDelete}
-          className="w-full text-red-600 border border-red-600 py-2 rounded"
-        >
-          Delete Account
-        </button>
-
+        
 <button
   onClick={() => {
     logout();

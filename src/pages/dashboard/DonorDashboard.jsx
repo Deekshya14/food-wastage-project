@@ -22,6 +22,8 @@ export default function DonorDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [processingRequest, setProcessingRequest] = useState(null);
+  const [selectedComplaint, setSelectedComplaint] = useState(null);
+const [showComplaintViewModal, setShowComplaintViewModal] = useState(false);
   // Add this near your other state declarations
 const playNotifSound = () => {
   const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); 
@@ -220,6 +222,7 @@ useEffect(() => {
       _id: data._id || Date.now(), // Use DB ID if available, else fallback
       message: data.message,
       type: data.type || "general",
+      senderId: data.senderId || null,
       isRead: false,
       createdAt: new Date(), // Important for the "5 mins ago" text
     }, ...prev]); 
@@ -315,6 +318,8 @@ useEffect(() => {
           imageFile: null,
           priceType: "free",
           price: "",
+          lat: 27.7172, // Default Latitude (Kathmandu)
+          lng: 85.3240, // Default Longitude
           
         });
         fetchFoods();
@@ -485,27 +490,57 @@ useEffect(() => {
                     </div>
                   ) : (
                     notifications.map((n) => (
-                      <div 
-                        key={n._id || n.id} 
-                        className={`p-3 rounded-2xl border-l-4 transition-all duration-300 ${
-                          n.isRead 
-                            ? 'bg-slate-50 border-transparent text-slate-500' 
-                            : 'bg-blue-50 border-blue-500 shadow-sm text-slate-900'
-                        }`}
-                      >
-                        <div className="flex gap-3">
-                          <div className={`p-2 rounded-lg h-fit ${n.isRead ? 'bg-gray-200 text-gray-400' : 'bg-blue-100 text-blue-600'}`}>
-                            <FaBell size={12} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-[11px] leading-snug font-bold">{n.message}</p>
-                            <span className="text-[9px] text-gray-400 font-medium mt-1 block">
-                              {n.createdAt ? formatDistanceToNow(new Date(n.createdAt)) + " ago" : "Just now"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+  <div 
+    key={n._id || n.id} 
+    onClick={() => {
+      setShowNotifications(false);
+
+      // 1. Mark notification as read locally right away
+      setNotifications(prev => prev.map(notif => 
+        notif._id === n._id ? { ...notif, isRead: true } : notif
+      ));
+
+      // 🚨 Check if notification text starts with our special complaint tag
+  if (n.message.includes("[COMPLAINT]") || n.type === "COMPLAINT_REPORTED") {
+    // Strip away the tag to present clean text to the user
+    const cleanText = n.message.replace("[COMPLAINT]", "").trim();
+    setSelectedComplaint({ text: cleanText });
+    setShowComplaintViewModal(true);
+    return; // 👈 Stop execution here so it doesn't open Chat!
+  }
+
+      // 2. CHECK IF IT'S A CHAT MESSAGE NOTIFICATION
+      if (n.type === "message" || n.type === "chat" || n.message.toLowerCase().includes("message")) {
+        if (n.senderId) {
+          setChatPartnerId(n.senderId); // Set the active message partner state
+          setShowChat(true);            // Open the Chat layout box overlay
+          return;                       // Stop execution so it doesn't scroll below
+        }
+      }
+
+      setTimeout(() => {
+        document.querySelector('[data-section="requests"]')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }}
+    className={`p-3 rounded-2xl border-l-4 transition-all duration-300 cursor-pointer hover:scale-[1.01] ${
+      n.isRead 
+        ? 'bg-slate-50 border-transparent text-slate-500' 
+        : 'bg-blue-50 border-blue-500 shadow-sm text-slate-900'
+    }`}
+  >
+    <div className="flex gap-3">
+      <div className={`p-2 rounded-lg h-fit ${n.isRead ? 'bg-gray-200 text-gray-400' : 'bg-blue-100 text-blue-600'}`}>
+        <FaBell size={12} />
+      </div>
+      <div className="flex-1">
+        <p className="text-[11px] leading-snug font-bold">{n.message}</p>
+        <span className="text-[9px] text-gray-400 font-medium mt-1 block">
+          {n.createdAt ? formatDistanceToNow(new Date(n.createdAt)) + " ago" : "Just now"}
+        </span>
+      </div>
+    </div>
+  </div>
+))
                   )}
                 </div>  
                 <button 
@@ -643,10 +678,10 @@ useEffect(() => {
                       </button>
                     </div>
                     <LocationPicker 
-                      selectedPos={[form.lat, form.lng]} 
-                      setSelectedPos={(pos) => setForm({ ...form, lat: pos[0], lng: pos[1] })} 
-                      setSelectedAddress={(addr) => setForm(prev => ({ ...prev, pickupLocation: addr }))}
-                    />
+  selectedPos={[form.lat || 27.7172, form.lng || 85.3240]} // ✅ Inline fallback safety guard!
+  setSelectedPos={(pos) => setForm({ ...form, lat: pos[0], lng: pos[1] })} 
+  setSelectedAddress={(addr) => setForm(prev => ({ ...prev, pickupLocation: addr }))}
+/>
                   </div>
                   <input placeholder="Describe the area (e.g. Near City Center Mall)" className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none" required value={form.pickupLocation} onChange={(e) => setForm({ ...form, pickupLocation: e.target.value })} />
                 </div>
@@ -663,13 +698,13 @@ useEffect(() => {
           </div>
         )}
 
-        {/* ACTIVE LISTINGS */}
+{/* ACTIVE LISTINGS */}
         <div className="space-y-6">
           <h2 className="text-xl font-black text-gray-800 flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-xl"><FaBox className="text-blue-600" size={16} /></div>
             My Active Listings
           </h2>
-          {foods.filter(f => f.status !== 'completed').length === 0 ? (
+          {foods && foods.filter(f => f && f.status !== 'completed').length === 0 ? (
              <div className="py-20 bg-white rounded-[3rem] border-4 border-dashed border-gray-50 flex flex-col items-center justify-center text-center">
               <div className="bg-blue-50 p-8 rounded-full mb-6 text-blue-300"><FaUtensils size={48} /></div>
               <h3 className="text-slate-800 font-black text-xl mb-2">No active listings!</h3>
@@ -677,62 +712,73 @@ useEffect(() => {
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-              {foods.filter(f => f.status !== 'completed').map((f) => (
-                <div key={f._id} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:shadow-xl hover:shadow-slate-100 transition-all duration-300">
-                  <div className="relative h-56 overflow-hidden">
-                    {f.image && <img src={`${API}/uploads/${f.image}`} alt={f.title} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />}
+              {foods && foods.filter(f => f && f.status !== 'completed').map((f) => (
+                <div key={f._id || Math.random().toString()} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:shadow-xl hover:shadow-slate-100 transition-all duration-300">
+                  <div className="relative h-56 overflow-hidden bg-slate-100">
+                    {f.image ? (
+                      <img 
+                        src={f.image.startsWith('http') ? f.image : `${API}/uploads/${f.image}`} 
+                        alt={f.title || "Food Item"} 
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" 
+                        onError={(e) => { e.target.src = "https://placehold.co/600x400?text=Food+Image"; }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs font-bold">No Photo Provided</div>
+                    )}
                     <div className="absolute top-5 left-5 flex flex-col gap-2">
-                      <span className={`px-4 py-2 rounded-full text-[10px] font-black uppercase shadow-lg ${f.priceType === 'free' ? 'bg-emerald-500/90 text-white' : 'bg-blue-600/90 text-white'}`}>
-                        {f.priceType === 'free' ? 'FREE' : `RS ${f.price}`}
+                      <span className={`px-4 py-2 rounded-full text-[10px] font-black uppercase shadow-lg ${f.priceType === 'paid' ? 'bg-blue-600/90 text-white' : 'bg-emerald-500/90 text-white'}`}>
+                        {f.priceType === 'paid' ? `RS ${f.price || 0}` : 'FREE'}
                       </span>
                       <span className="px-3 py-1 bg-white/95 text-slate-800 text-[9px] font-black rounded-full shadow-md flex items-center gap-2">
-                         <div className={`h-1.5 w-1.5 rounded-full ${f.condition === 'fresh' ? 'bg-emerald-400' : 'bg-amber-400'}`}></div>
-                         {f.condition.toUpperCase()}
+                         <div className={`h-1.5 w-1.5 rounded-full ${String(f.condition || '').toLowerCase() === 'fresh' ? 'bg-emerald-400' : 'bg-amber-400'}`}></div>
+                         {String(f.condition || 'fresh').toUpperCase()}
                       </span>
                     </div>
                   </div>
                   <div className="p-7 space-y-4 flex-1 flex flex-col">
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-2">
-  <h3 className="font-black text-slate-800 text-xl leading-tight truncate pr-4">{f.title}</h3>
-  <span className={`shrink-0 px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${f.status === 'reserved' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-    {f.status === 'reserved' ? '● Reserved' : '● Available'}
-  </span>
-</div>
+                        <h3 className="font-black text-slate-800 text-xl leading-tight truncate pr-4">{f.title || "Untitled Listing"}</h3>
+                        <span className={`shrink-0 px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${f.status === 'reserved' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                          {f.status === 'reserved' ? '● Reserved' : '● Available'}
+                        </span>
+                      </div>
 
-{/* DESCRIPTION */}
-{f.description && (
-  <p className="text-[11px] text-slate-400 font-medium leading-relaxed line-clamp-2 mb-2">
-    {f.description}
-  </p>
-)}
+                      {/* DESCRIPTION */}
+                      <p className="text-[11px] text-slate-400 font-medium leading-relaxed line-clamp-2 mb-2">
+                        {f.description || "No further description provided for this food item."}
+                      </p>
 
-<div className="flex flex-wrap gap-2 mt-4">
-                        <span className="text-blue-600 text-[9px] font-black uppercase bg-blue-50 px-3 py-1.5 rounded-xl flex items-center gap-1.5"><FaLeaf size={10} /> {f.wasteCategory}</span>
-                        <span className="text-emerald-600 text-[9px] font-black uppercase bg-emerald-50 px-3 py-1.5 rounded-xl flex items-center gap-1.5"><FaUtensils size={10} /> {f.foodState}</span>
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        <span className="text-blue-600 text-[9px] font-black uppercase bg-blue-50 px-3 py-1.5 rounded-xl flex items-center gap-1.5"><FaLeaf size={10} /> {f.wasteCategory || "biodegradable"}</span>
+                        <span className="text-emerald-600 text-[9px] font-black uppercase bg-emerald-50 px-3 py-1.5 rounded-xl flex items-center gap-1.5"><FaUtensils size={10} /> {f.foodState || "cooked"}</span>
                       </div>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-y-3 gap-x-2 border-t border-gray-50 pt-5">
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><FaWeightHanging className="text-slate-300" /> {f.weight} kg</div>
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 truncate"><FaMapMarkerAlt className="text-slate-300" /> {f.location?.address || f.pickupLocation || "N/A"}</div>
-                      <div className="flex items-center gap-2 text-[10px] font-black text-rose-500 bg-rose-50 px-3 py-1 rounded-full col-span-2 w-fit"><FaCalendarAlt /> Until: {new Date(f.availableDate).toLocaleDateString()}</div>
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500"><FaWeightHanging className="text-slate-300" /> {f.weight || 0} kg</div>
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 truncate"><FaMapMarkerAlt className="text-slate-300" /> {f.location?.address || f.pickupLocation || "Kathmandu"}</div>
+                      <div className="flex items-center gap-2 text-[10px] font-black text-rose-500 bg-rose-50 px-3 py-1 rounded-full col-span-2 w-fit">
+                        <FaCalendarAlt /> Until: {f.availableDate ? new Date(f.availableDate).toLocaleDateString() : new Date().toLocaleDateString()}
+                      </div>
                     </div>
 
                     <div className="flex gap-2 pt-2">
                       {f.status === 'reserved' ? (
-                        <div className="flex-1 bg-slate-50 text-slate-300 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 cursor-not-allowed">
+                        <div className="w-full bg-slate-50 text-slate-300 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 cursor-not-allowed border border-slate-100">
                           <FaExclamationTriangle /> Locked: Item Reserved
                         </div>
                       ) : (
                         <>
                           <button 
+                            type="button"
                             onClick={() => startEdit(f)} 
                             className="flex-1 bg-blue-50 text-blue-600 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
                           >
                             <FaEdit /> Edit
                           </button>
                           <button 
+                            type="button"
                             onClick={() => deleteFood(f._id)} 
                             className="flex-1 bg-rose-50 text-rose-500 py-4 rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-rose-600 hover:text-white transition-all shadow-sm"
                           >
@@ -750,10 +796,10 @@ useEffect(() => {
 
         {/* REQUESTS PIPELINE SECTION */}
         <div className="space-y-6">
-          <h2 className="text-xl font-black text-gray-800 flex items-center gap-3">
-            <div className="p-2 bg-amber-100 rounded-xl"><FaClock className="text-amber-600" size={16} /></div>
-            Incoming Requests
-          </h2>
+          <h2 data-section="requests" className="text-xl font-black text-gray-800 flex items-center gap-3">
+  <div className="p-2 bg-amber-100 rounded-xl"><FaClock className="text-amber-600" size={16} /></div>
+  Incoming Requests
+</h2>
           <div className="grid md:grid-cols-3 gap-6 items-start">
             {['pending', 'approved', 'rejected'].map(statusType => (
               <div key={statusType} className="space-y-4">
@@ -906,7 +952,51 @@ useEffect(() => {
         </div>
       </div>
 
-    {showChat && <ChatLayout partnerId={chatPartnerId} onClose={() => setShowChat(false)} />}
+    {showChat && (
+  <ChatLayout 
+    partnerId={chatPartnerId} 
+    onClose={() => {
+      setShowChat(false);
+      setChatPartnerId(null);
+    }} 
+  />
+)}
+{/* ⚠️ COMPLAINT DETAIL ALERTS WINDOW MODAL */}
+{showComplaintViewModal && selectedComplaint && (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fadeIn">
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 max-w-md w-full p-8 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] transform transition-all">
+          <div className="flex items-center gap-3 text-rose-500 mb-5">
+            <div className="w-10 h-10 bg-rose-50 rounded-2xl flex items-center justify-center shadow-inner">
+              <FaExclamationTriangle size={16} />
+            </div>
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-800">
+              Official Issue Notice
+            </h3>
+          </div>
+          
+          <p className="text-[13px] leading-relaxed font-medium text-slate-600 bg-slate-50 border border-slate-100 p-5 rounded-2xl mb-6">
+            {selectedComplaint.text}
+          </p>
+
+          <div className="space-y-3">
+            <p className="text-[10px] text-slate-400 font-bold leading-snug uppercase tracking-tight">
+              ℹ️ This report has been copied to the administrator portal for automated safety reviews. Please maintain compliance with food sharing protocols.
+            </p>
+            
+            <button
+              onClick={() => {
+                setShowComplaintViewModal(false);
+                setSelectedComplaint(null);
+              }}
+              className="w-full mt-2 py-4 bg-slate-900 hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-md shadow-slate-100"
+            >
+              Acknowledge & Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
   </div>
 );
 }

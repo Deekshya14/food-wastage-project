@@ -133,11 +133,11 @@ setComplaints(Array.isArray(comps) ? comps : []);
 setPayments(Array.isArray(pays) ? pays : []);  
 
 setStats({
-  users: Array.isArray(users) ? users.length : 0,
-  food: Array.isArray(food) ? food.length : 0,
-  rescued: Array.isArray(food) ? food.filter(f => f.status === 'completed').length : 0,
-  totalWeight: food.reduce((acc, curr) => acc + (parseFloat(curr.weight) || 0), 0).toFixed(1),
-  totalRevenue: pays.reduce((acc, p) => acc + (p.foodId?.price || 0), 0)  // 👈 new
+  users: Array.isArray(users) ? users.filter(u => u.role !== 'admin').length : 0,
+          food: Array.isArray(food) ? food.length : 0,
+          rescued: Array.isArray(food) ? food.filter(f => f.status === 'completed').length : 0,
+          totalWeight: food.reduce((acc, curr) => acc + (parseFloat(curr.weight) || 0), 0).toFixed(1),
+          totalRevenue: pays.reduce((acc, p) => acc + (p.foodId?.price || 0), 0)
 });
     } catch (err) { 
       toast.error("Database sync failed");
@@ -355,24 +355,29 @@ setStats({
                     <tr><th className="p-6">Member Identity</th><th className="p-6">Role</th><th className="p-6">Email Verification</th><th className="p-6">Status</th><th className="p-6 text-right">Moderation</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {allUsers.filter(u => 
-  u.role !== 'admin' && 
-  u.fullName.toLowerCase().includes(searchTerm.toLowerCase())
-).map(u => (
-                      <tr key={u._id} className="hover:bg-emerald-50/20 transition-colors">
-                        <td className="p-6"><p className="font-bold text-slate-700">{u.fullName}</p><p className="text-[11px] text-slate-400">{u.email}</p></td>
-                        <td className="p-6"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${u.role === 'admin' ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-100 text-slate-500'}`}>{u.role}</span></td>
-                        <td className="p-6"><div className={`flex items-center gap-2 font-black text-[10px] uppercase ${u.isVerified ? 'text-emerald-500' : 'text-amber-400'}`}>{u.isVerified ? <FaUserCheck /> : <FaEnvelopeOpenText />}{u.isVerified ? 'Verified' : 'Pending'}</div></td>
-                        <td className="p-6"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${u.status === 'banned' ? 'bg-rose-100 text-rose-500' : 'bg-emerald-100 text-emerald-600'}`}>{u.status || 'Active'}</span></td>
-                        <td className="p-6 text-right">
-                          {u.role !== 'admin' && (
-                            <button onClick={() => handleToggleUserStatus(u._id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${u.status === 'banned' ? 'bg-emerald-500 text-white' : 'bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white'}`}>
-                              {u.status === 'banned' ? 'Restore' : 'Suspend'}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {allUsers.filter(u => {
+  if (!u || u.role === 'admin') return false;
+  // Dynamic fallback strings to protect .toLowerCase() from breaking
+  const nameToSearch = (u.fullName || u.name || u.email || "Unknown Member").toLowerCase();
+  return nameToSearch.includes((searchTerm || "").toLowerCase());
+}).map(u => (
+  <tr key={u._id} className="hover:bg-emerald-50/20 transition-colors">
+    <td className="p-6">
+      <p className="font-bold text-slate-700">{u.fullName || u.name || u.email?.split('@')[0] || "Unknown Member"}</p>
+      <p className="text-[11px] text-slate-400">{u.email}</p>
+    </td>
+    <td className="p-6"><span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${u.role === 'admin' ? 'bg-indigo-50 text-indigo-500' : 'bg-slate-100 text-slate-500'}`}>{u.role}</span></td>
+    <td className="p-6"><div className={`flex items-center gap-2 font-black text-[10px] uppercase ${u.isVerified ? 'text-emerald-500' : 'text-amber-400'}`}>{u.isVerified ? <FaUserCheck /> : <FaEnvelopeOpenText />}{u.isVerified ? 'Verified' : 'Pending'}</div></td>
+    <td className="p-6"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${u.status === 'banned' ? 'bg-rose-100 text-rose-500' : 'bg-emerald-100 text-emerald-600'}`}>{u.status || 'Active'}</span></td>
+    <td className="p-6 text-right">
+      {u.role !== 'admin' && (
+        <button onClick={() => handleToggleUserStatus(u._id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${u.status === 'banned' ? 'bg-emerald-500 text-white' : 'bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white'}`}>
+          {u.status === 'banned' ? 'Restore' : 'Suspend'}
+        </button>
+      )}
+    </td>
+  </tr>
+))}
                   </tbody>
                 </table>
               </div>

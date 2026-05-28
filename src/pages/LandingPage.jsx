@@ -52,6 +52,52 @@ const Stat = ({ icon: Icon, label, end, delay = 0 }) => {
 // MAIN LANDING PAGE
 // -------------------------
 const LandingPage = () => {
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactMsg, setContactMsg] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false); // ✅ Submission loading state
+
+  // ✅ New handler function to submit contact forms directly to the admin dashboard database
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!contactName.trim() || !contactEmail.trim() || !contactMsg.trim()) {
+      alert("Please fill in all fields before sending.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch("http://localhost:5000/api/reports/public-contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: contactName,
+          email: contactEmail,
+          text: contactMsg,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert("Your message has been sent directly to the Admin Dashboard!");
+        // Clear form fields
+        setContactName("");
+        setContactEmail("");
+        setContactMsg("");
+      } else {
+        alert(data.message || "Failed to deliver message. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert("Could not connect to the server. Please check if your backend is running.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const Logo = () => (
     <div className="flex items-center gap-3 select-none">
       <div className="bg-gradient-to-br from-green-400 to-green-700 text-white p-2 rounded-full shadow-md">
@@ -92,7 +138,6 @@ const LandingPage = () => {
             <a href="#impact" className="text-gray-700 hover:text-green-600 transition">Impact</a>
             <a href="#contact" className="text-gray-700 hover:text-green-600 transition">Contact</a>
             
-            {/* LOGIN FIXED */}
             <Link
               to="/login"
               className="ml-4 inline-block bg-green-600 text-white px-4 py-2 rounded-full font-semibold shadow-sm hover:bg-green-700 transition"
@@ -101,7 +146,6 @@ const LandingPage = () => {
             </Link>
           </nav>
 
-          {/* MOBILE BUTTON */}
           <div className="md:hidden">
             <Link
               to="/signup"
@@ -132,8 +176,6 @@ const LandingPage = () => {
           </div>
 
           <div className="container mx-auto px-6 md:px-8 py-20 md:py-28 flex flex-col-reverse md:flex-row items-center gap-10">
-            
-            {/* LEFT */}
             <div className="w-full md:w-6/12">
               <motion.h1
                 initial={{ x: -18, opacity: 0 }}
@@ -153,7 +195,6 @@ const LandingPage = () => {
                 A local-first platform to list surplus meals, coordinate pickups, and ensure safe redistribution with verification and easy communication.
               </motion.p>
 
-              {/* FIXED BUTTONS */}
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -189,7 +230,6 @@ const LandingPage = () => {
               </motion.div>
             </div>
 
-            {/* RIGHT IMAGE */}
             <div className="w-full md:w-6/12 flex items-center justify-center relative">
               <motion.div
                 initial={{ scale: 0.98, opacity: 0 }}
@@ -223,7 +263,6 @@ const LandingPage = () => {
                   </div>
                 </div>
 
-                {/* Floating icons */}
                 <motion.div animate={float} className="absolute -left-6 -top-6 bg-white p-3 rounded-full shadow">
                   <FaHeart className="text-red-500 w-5 h-5" />
                 </motion.div>
@@ -232,7 +271,6 @@ const LandingPage = () => {
                 </motion.div>
               </motion.div>
             </div>
-
           </div>
         </section>
 
@@ -387,13 +425,40 @@ const LandingPage = () => {
               For partnerships, support or feedback — reach out and we'll respond promptly.
             </motion.p>
 
-            <form className="mt-6 grid gap-4">
-              <input aria-label="Name" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400" placeholder="Your name" />
-              <input aria-label="Email" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400" placeholder="Email" />
-              <textarea aria-label="Message" rows="4" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400" placeholder="Message" />
+            {/* ✅ Wrapper converted to a proper form element connected to our API function */}
+            <form onSubmit={handleSendMessage} className="mt-6 grid gap-4">
+              <input 
+                aria-label="Name" 
+                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400 text-gray-800 bg-white" 
+                placeholder="Your name" 
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+              />
+              <input 
+                aria-label="Email" 
+                type="email"
+                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400 text-gray-800 bg-white" 
+                placeholder="Email" 
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+              />
+              <textarea 
+                aria-label="Message" 
+                rows="4" 
+                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400 text-gray-800 bg-white" 
+                placeholder="Message" 
+                value={contactMsg}
+                onChange={(e) => setContactMsg(e.target.value)}
+              />
+              
               <div className="flex items-center gap-3 justify-center">
-                <button type="submit" className="bg-green-600 text-white px-6 py-3 rounded-full font-semibold shadow hover:bg-green-700 transition">
-                  Send Message
+                {/* ✅ Changed link layout to a form submission action button */}
+                <button 
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="bg-green-600 text-white px-6 py-3 rounded-full font-semibold shadow hover:bg-green-700 transition inline-block text-center cursor-pointer select-none disabled:bg-gray-400"
+                >
+                  {isSubmitting ? "Sending..." : "Send Message"}
                 </button>
               </div>
             </form>

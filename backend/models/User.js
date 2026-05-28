@@ -14,6 +14,9 @@ const userSchema = new mongoose.Schema(
       default: "receiver",
     },
 
+
+    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // ← NEW
+
     status: {
     type: String,
     enum: ["active", "banned"],
